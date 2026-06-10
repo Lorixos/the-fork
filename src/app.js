@@ -22,6 +22,9 @@ const state = {
   commentarySaving: false,
   commentaryAuthor: "Dept team",
   commentaryEditMode: false,
+  currentUser: null,
+  authError: null,
+  authLoading: false,
   data: {
     rows: [],
     source: "loading",
@@ -234,6 +237,15 @@ function iconUrl(name) {
 
 function flagUrl(flagCode) {
   return `https://flagcdn.com/w80/${flagCode}.png`;
+}
+
+function isValidDomain(email) {
+  if (!email) return false;
+  const lowercaseEmail = email.toLowerCase();
+  const parts = lowercaseEmail.split('@');
+  if (parts.length !== 2) return false;
+  const domain = parts[1];
+  return domain.startsWith('deptagency.') || domain.startsWith('thefork.');
 }
 
 function toNumber(value) {
@@ -568,6 +580,183 @@ function sourceTone() {
   return "";
 }
 
+function renderAuthLoadingScreen() {
+  return `
+    <div class="login-layout">
+      <div class="login-loading-container">
+        <div class="login-spinner"></div>
+        <p class="login-loading-text">Verifying corporate security credentials...</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderUserAuthBadge() {
+  if (!state.currentUser) return "";
+  const photoUrl = state.currentUser.photoURL || iconUrl("user");
+  const displayName = state.currentUser.displayName || state.currentUser.email.split("@")[0];
+  const email = state.currentUser.email;
+  return `
+    <div class="user-auth-badge">
+      <img src="${photoUrl}" alt="${displayName}" class="user-avatar" onerror="this.src='${iconUrl("user")}'" />
+      <div class="user-info">
+        <span class="user-name">${displayName}</span>
+        <span class="user-email">${email}</span>
+      </div>
+      <button class="sign-out-btn" type="button" data-action="sign-out" title="Sign Out" aria-label="Sign Out">
+        <img src="${iconUrl("log-out")}" alt="Logout" />
+      </button>
+    </div>
+  `;
+}
+
+function renderLoginScreen() {
+  const isSavingOrLoading = state.authLoading;
+  const errorAlertHtml = state.authError ? `
+    <div class="auth-error-alert">
+      <span class="auth-error-icon-wrap"><img src="${iconUrl("alert-triangle")}" alt="Alert" class="auth-error-icon" /></span>
+      <div class="auth-error-text">${state.authError}</div>
+    </div>
+  ` : `
+    <div class="auth-info-note">
+      <span class="auth-info-icon-wrap"><img src="${iconUrl("shield-check")}" alt="Secure" class="auth-info-icon" /></span>
+      <span>Authorized corporate domains only: <strong>@deptagency.*</strong> & <strong>@thefork.*</strong></span>
+    </div>
+  `;
+
+  return `
+    <div class="login-layout">
+      <section class="login-visual-panel" aria-label="Brand Visuals">
+        <div class="login-visual-header">
+          <div class="login-brand-logo">
+            <img src="assets/logos/thefork-seeklogo.svg" alt="TheFork" class="login-fork-img" />
+          </div>
+          <span class="login-visual-tagline">Partnership Insights Hub</span>
+        </div>
+        
+        <div class="login-visual-center">
+          <h1 class="login-hero-title">Secure Social Performance</h1>
+          <p class="login-hero-desc">Connecting Meta & TikTok social advertising intelligence to corporate decision-making pipelines securely.</p>
+          
+          <div class="login-visual-mockup">
+            <div class="mockup-header">
+              <div class="mockup-dots">
+                <span class="mockup-dot r"></span>
+                <span class="mockup-dot y"></span>
+                <span class="mockup-dot g"></span>
+              </div>
+              <div class="mockup-title">Social Performance Dashboard</div>
+            </div>
+            <div class="mockup-body">
+              <div class="mockup-row">
+                <div class="mockup-card">
+                  <span class="mockup-label">Cost</span>
+                  <span class="mockup-value">178K EUR</span>
+                  <span class="mockup-trend up">+4.2%</span>
+                </div>
+                <div class="mockup-card">
+                  <span class="mockup-label">Bookings</span>
+                  <span class="mockup-value">18.5K</span>
+                  <span class="mockup-trend up">+11.8%</span>
+                </div>
+              </div>
+              <div class="mockup-chart-container">
+                <svg viewBox="0 0 320 80" class="mockup-chart-svg">
+                  <path d="M 0 55 Q 40 25 80 45 T 160 20 T 240 35 T 320 10" fill="none" stroke="url(#chart-glow)" stroke-width="3" stroke-linecap="round"></path>
+                  <path d="M 0 55 Q 40 25 80 45 T 160 20 T 240 35 T 320 10 L 320 80 L 0 80 Z" fill="url(#chart-bg)" opacity="0.12"></path>
+                  <defs>
+                    <linearGradient id="chart-glow" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="#7cf45c"></stop>
+                      <stop offset="100%" stop-color="#13c76b"></stop>
+                    </linearGradient>
+                    <linearGradient id="chart-bg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#7cf45c"></stop>
+                      <stop offset="100%" stop-color="#7cf45c" stop-opacity="0"></stop>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="login-visual-footer">
+          <p>© 2026 TheFork & DEPT® Partnership. All rights reserved.</p>
+        </div>
+      </section>
+      
+      <section class="login-form-panel" aria-label="Sign In">
+        <div class="login-card">
+          <div class="login-logos">
+            <img src="assets/logos/thefork-seeklogo.svg" alt="TheFork" class="login-card-fork" />
+            <span class="login-card-x">×</span>
+            <div class="login-card-dept">DEPT<span>®</span></div>
+          </div>
+          
+          <h2 class="login-card-title">Corporate Sign-in</h2>
+          <p class="login-card-desc">Sign in with your corporate Google identity to access real-time BigQuery metrics and commentary.</p>
+          
+          <div class="login-card-divider"></div>
+          
+          <div class="login-card-action">
+            <button type="button" class="google-login-btn" data-action="google-login"${isSavingOrLoading ? " disabled" : ""}>
+              ${isSavingOrLoading ? `
+                <div class="login-btn-spinner"></div>
+                <span>Signing in...</span>
+              ` : `
+                <img src="https://auth.globus.org/v2/web/credentials/images/google-g-logo.svg" alt="Google" class="google-icon-img" />
+                <span>Sign in with Google</span>
+              `}
+            </button>
+          </div>
+          
+          <div class="login-card-footer">
+            ${errorAlertHtml}
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function handleGoogleLogin() {
+  if (state.authLoading) return;
+  state.authLoading = true;
+  state.authError = null;
+  render();
+
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  
+  firebase.auth().signInWithPopup(provider)
+    .then((result) => {
+      const user = result.user;
+      if (user && user.email) {
+        if (isValidDomain(user.email)) {
+          state.currentUser = user;
+          state.authError = null;
+          render();
+          connectData();
+        } else {
+          state.currentUser = null;
+          state.data.rows = [];
+          state.authError = `Access Denied: The account ${user.email} is not authorized. Only corporate domains (@deptagency.* and @thefork.*) can access this dashboard.`;
+          firebase.auth().signOut().then(() => {
+            render();
+          });
+        }
+      }
+    })
+    .catch((error) => {
+      console.error("Google authentication failed:", error);
+      state.authError = `Authentication error: ${error.message}`;
+    })
+    .finally(() => {
+      state.authLoading = false;
+      render();
+    });
+}
+
 function renderBrandMark() {
   const isMeta = state.platform === "meta";
   const isTiktok = state.platform === "tiktok";
@@ -646,6 +835,7 @@ function renderHeader() {
         </div>
         <section class="top-actions" aria-label="Dashboard actions">
           ${dateFilterHtml}
+          ${renderUserAuthBadge()}
           <div class="dept-mark">DEPT<span>®</span></div>
         </section>
       </section>
@@ -2597,8 +2787,20 @@ function renderScorecard() {
 }
 
 function render() {
-  app.innerHTML = `${renderHeader()}${renderScorecard()}${renderPerformanceTable()}`;
-  postRender();
+  if (state.authLoading && !state.currentUser) {
+    app.className = "login-shell";
+    app.innerHTML = renderAuthLoadingScreen();
+    return;
+  }
+  
+  if (!state.currentUser) {
+    app.className = "login-shell";
+    app.innerHTML = renderLoginScreen();
+  } else {
+    app.className = "dashboard-shell";
+    app.innerHTML = `${renderHeader()}${renderScorecard()}${renderPerformanceTable()}`;
+    postRender();
+  }
 }
 
 function postRender() {
@@ -2955,6 +3157,25 @@ app.addEventListener("click", (event) => {
   const control = event.target.closest("[data-action]");
   if (!control) return;
 
+  if (control.dataset.action === "google-login") {
+    handleGoogleLogin();
+    return;
+  }
+
+  if (control.dataset.action === "sign-out") {
+    state.authLoading = true;
+    render();
+    firebase.auth().signOut()
+      .catch((err) => {
+        console.error("Logout failed:", err);
+      })
+      .finally(() => {
+        state.authLoading = false;
+        render();
+      });
+    return;
+  }
+
   if (control.dataset.action === "market") {
     state.market = control.dataset.market;
     state.openControl = null;
@@ -3242,5 +3463,46 @@ app.addEventListener("mouseout", (event) => {
   }
 });
 
-render();
-connectData();
+// Firebase initialization config
+const firebaseConfig = {
+  apiKey: "AIzaSyCEa3ajaSQEN8PvdVQIELvmQGDVjhKNEdw",
+  authDomain: "byte-data-management.firebaseapp.com",
+  projectId: "byte-data-management",
+  appId: "1:1020883418437:web:62de498c617ae95c87522c"
+};
+
+// Initialize Firebase
+if (typeof firebase !== "undefined") {
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  
+  state.authLoading = true;
+  render();
+  
+  firebase.auth().onAuthStateChanged((user) => {
+    state.authLoading = false;
+    if (user) {
+      if (isValidDomain(user.email)) {
+        state.currentUser = user;
+        state.authError = null;
+        render();
+        connectData();
+      } else {
+        state.currentUser = null;
+        state.data.rows = [];
+        state.authError = `Access Denied: The email domain of ${user.email} is not authorized. Please use a @deptagency.* or @thefork.* account.`;
+        firebase.auth().signOut().then(() => {
+          render();
+        });
+      }
+    } else {
+      state.currentUser = null;
+      state.data.rows = [];
+      render();
+    }
+  });
+} else {
+  state.authError = "Security service could not be loaded. Please reload the page or check your connection.";
+  render();
+}

@@ -3483,8 +3483,8 @@ button:focus-visible {
 /* Left Visual Panel */
 .login-visual-panel {
   flex: 1.25;
-  background: radial-gradient(1000px 600px at 0% 0%, rgba(124, 244, 92, 0.18), transparent 75%),
-              linear-gradient(135deg, #021a15 0%, var(--green-950) 100%);
+  background: radial-gradient(1000px 600px at 0% 0%, rgba(124, 244, 92, 0.22), transparent 75%),
+              linear-gradient(135deg, #053b32 0%, var(--green-900) 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -3620,6 +3620,21 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+.mockup-skeleton-label {
+  height: 6px;
+  width: 48px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.mockup-skeleton-value {
+  height: 14px;
+  width: 96px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
 }
 
 .mockup-label {

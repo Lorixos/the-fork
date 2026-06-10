@@ -631,7 +631,6 @@ function renderLoginScreen() {
           <div class="login-brand-logo">
             <img src="assets/logos/thefork-seeklogo.svg" alt="TheFork" class="login-fork-img" />
           </div>
-          <span class="login-visual-tagline">Partnership Insights Hub</span>
         </div>
         
         <div class="login-visual-center">
@@ -645,19 +644,17 @@ function renderLoginScreen() {
                 <span class="mockup-dot y"></span>
                 <span class="mockup-dot g"></span>
               </div>
-              <div class="mockup-title">Social Performance Dashboard</div>
+              <div class="mockup-title">Insights Hub</div>
             </div>
             <div class="mockup-body">
               <div class="mockup-row">
                 <div class="mockup-card">
-                  <span class="mockup-label">Cost</span>
-                  <span class="mockup-value">178K EUR</span>
-                  <span class="mockup-trend up">+4.2%</span>
+                  <div class="mockup-skeleton-label"></div>
+                  <div class="mockup-skeleton-value"></div>
                 </div>
                 <div class="mockup-card">
-                  <span class="mockup-label">Bookings</span>
-                  <span class="mockup-value">18.5K</span>
-                  <span class="mockup-trend up">+11.8%</span>
+                  <div class="mockup-skeleton-label"></div>
+                  <div class="mockup-skeleton-value"></div>
                 </div>
               </div>
               <div class="mockup-chart-container">
@@ -704,7 +701,7 @@ function renderLoginScreen() {
                 <div class="login-btn-spinner"></div>
                 <span>Signing in...</span>
               ` : `
-                <img src="https://auth.globus.org/v2/web/credentials/images/google-g-logo.svg" alt="Google" class="google-icon-img" />
+                <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/google/google-original.svg" alt="Google" class="google-icon-img" />
                 <span>Sign in with Google</span>
               `}
             </button>

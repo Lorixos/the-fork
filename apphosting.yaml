@@ -1,0 +1,12 @@
+# Settings for Cloud Run
+runConfig:
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+# Custom build and run commands for plain Node.js Express server
+scripts:
+  buildCommand: "echo 'Building plain server'"
+  runCommand: "node server.js"

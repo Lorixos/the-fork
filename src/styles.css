@@ -3813,6 +3813,7 @@ button:focus-visible {
 .auth-info-note,
 .auth-error-alert {
   display: flex;
+  align-items: center;
   gap: 12px;
   padding: 14px 16px;
   border-radius: 14px;
@@ -3830,8 +3831,8 @@ button:focus-visible {
 .auth-info-icon-wrap,
 .auth-error-icon-wrap {
   display: flex;
-  align-items: flex-start;
-  margin-top: 1px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .auth-info-icon {

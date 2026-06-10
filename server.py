@@ -6,6 +6,17 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 from google.cloud import bigquery
 
+# Load local .env variables if file exists
+if os.path.exists('.env'):
+    with open('.env', 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if '=' in line:
+                key, val = line.split('=', 1)
+                os.environ[key.strip()] = val.strip()
+
 # Helper functions for performance data processing
 def normalize_market(m):
     if not m:
@@ -102,9 +113,20 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
 
+    def handle_get_config(self):
+        config_data = {
+            "apiKey": os.environ.get("FIREBASE_API_KEY"),
+            "authDomain": os.environ.get("FIREBASE_AUTH_DOMAIN", "byte-data-management.firebaseapp.com"),
+            "projectId": os.environ.get("FIREBASE_PROJECT_ID", "byte-data-management"),
+            "appId": os.environ.get("FIREBASE_APP_ID", "1:1020883418437:web:62de498c617ae95c87522c")
+        }
+        self.send_json_response(200, config_data)
+
     def do_GET(self):
         parsed_url = urlparse(self.path)
-        if parsed_url.path == '/api/commentary':
+        if parsed_url.path == '/api/config':
+            self.handle_get_config()
+        elif parsed_url.path == '/api/commentary':
             self.handle_get_commentary(parsed_url.query)
         elif parsed_url.path == '/api/commentary/saved_weeks':
             self.handle_get_saved_weeks(parsed_url.query)

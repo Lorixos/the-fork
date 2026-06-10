@@ -3463,45 +3463,54 @@ app.addEventListener("mouseout", (event) => {
   }
 });
 
-// Firebase initialization config
-const firebaseConfig = {
-  apiKey: "AIzaSyCEa3ajaSQEN8PvdVQIELvmQGDVjhKNEdw",
-  authDomain: "byte-data-management.firebaseapp.com",
-  projectId: "byte-data-management",
-  appId: "1:1020883418437:web:62de498c617ae95c87522c"
-};
-
 // Initialize Firebase
 if (typeof firebase !== "undefined") {
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
-  
   state.authLoading = true;
   render();
   
-  firebase.auth().onAuthStateChanged((user) => {
-    state.authLoading = false;
-    if (user) {
-      if (isValidDomain(user.email)) {
-        state.currentUser = user;
-        state.authError = null;
-        render();
-        connectData();
-      } else {
-        state.currentUser = null;
-        state.data.rows = [];
-        state.authError = `Access Denied: The email domain of ${user.email} is not authorized. Please use a @deptagency.* or @thefork.* account.`;
-        firebase.auth().signOut().then(() => {
-          render();
-        });
+  fetch('/api/config')
+    .then(res => {
+      if (!res.ok) throw new Error("Failed to load configuration");
+      return res.json();
+    })
+    .then(firebaseConfig => {
+      if (!firebaseConfig.apiKey) {
+        throw new Error("Configuration is missing API key");
       }
-    } else {
-      state.currentUser = null;
-      state.data.rows = [];
+      
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      
+      firebase.auth().onAuthStateChanged((user) => {
+        state.authLoading = false;
+        if (user) {
+          if (isValidDomain(user.email)) {
+            state.currentUser = user;
+            state.authError = null;
+            render();
+            connectData();
+          } else {
+            state.currentUser = null;
+            state.data.rows = [];
+            state.authError = `Access Denied: The email domain of ${user.email} is not authorized. Please use a @deptagency.* or @thefork.* account.`;
+            firebase.auth().signOut().then(() => {
+              render();
+            });
+          }
+        } else {
+          state.currentUser = null;
+          state.data.rows = [];
+          render();
+        }
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      state.authLoading = false;
+      state.authError = "Security service configuration could not be loaded. Please check that environment variables are configured correctly.";
       render();
-    }
-  });
+    });
 } else {
   state.authError = "Security service could not be loaded. Please reload the page or check your connection.";
   render();

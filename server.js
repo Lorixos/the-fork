@@ -1,7 +1,21 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { BigQuery } = require('@google-cloud/bigquery');
+
+// Load local .env variables if file exists
+if (fs.existsSync(path.join(__dirname, '.env'))) {
+  const envFile = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+  envFile.split('\n').forEach(line => {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith('#')) return;
+    const [key, ...valueParts] = trimmedLine.split('=');
+    if (key && valueParts.length > 0) {
+      process.env[key.trim()] = valueParts.join('=').trim();
+    }
+  });
+}
 
 // Set GOOGLE_APPLICATION_CREDENTIALS locally if not in production and not already set
 if (process.env.NODE_ENV !== 'production' && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
@@ -103,6 +117,16 @@ function getDaysBetween(startStr, endStr) {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays + 1;
 }
+
+// Endpoint to securely serve Firebase configuration from env/secrets
+app.get('/api/config', (req, res) => {
+  res.json({
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "byte-data-management.firebaseapp.com",
+    projectId: process.env.FIREBASE_PROJECT_ID || "byte-data-management",
+    appId: process.env.FIREBASE_APP_ID || "1:1020883418437:web:62de498c617ae95c87522c"
+  });
+});
 
 // 1. GET /api/commentary
 app.get('/api/commentary', async (req, res) => {

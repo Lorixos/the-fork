@@ -2336,8 +2336,33 @@ button:focus-visible {
   overflow: visible;
 }
 
+@keyframes drawSparkline {
+  from {
+    stroke-dashoffset: 150;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fadeArea {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .timeline-area {
   stroke: none;
+  opacity: 0;
+  animation: fadeArea 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.timeline-area.no-anim {
+  animation: none;
+  opacity: 1;
 }
 
 .timeline-line {
@@ -2346,6 +2371,14 @@ button:focus-visible {
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 4px 6px rgba(6, 112, 93, 0.15));
+  stroke-dasharray: 150;
+  stroke-dashoffset: 150;
+  animation: drawSparkline 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.timeline-line.no-anim {
+  animation: none;
+  stroke-dashoffset: 0;
 }
 
 .timeline-guide {

@@ -35,6 +35,7 @@ const state = {
   campaignBudgets: {},
   originalCampaignBudgets: {},
   budgetsSaving: false,
+  sparklinesAnimated: false,
 };
 
 const markets = [
@@ -1414,8 +1415,8 @@ function renderTimeline(points, index, metric) {
             <stop offset="100%" stop-color="#13c76b" stop-opacity="0" />
           </linearGradient>
         </defs>
-        <polygon class="timeline-area" points="0,48 ${coordinates} 100,48" fill="url(#${areaGradientId})" />
-        <polyline class="timeline-line" points="${coordinates}" stroke="url(#${gradientId})" vector-effect="non-scaling-stroke" />
+        <polygon class="timeline-area${state.sparklinesAnimated ? ' no-anim' : ''}" points="0,48 ${coordinates} 100,48" fill="url(#${areaGradientId})" />
+        <polyline class="timeline-line${state.sparklinesAnimated ? ' no-anim' : ''}" points="${coordinates}" stroke="url(#${gradientId})" vector-effect="non-scaling-stroke" />
       </svg>
       <div class="timeline-guide" style="display: none;"></div>
       <div class="timeline-dot" style="display: none;"></div>
@@ -2798,6 +2799,7 @@ function render() {
     app.className = "dashboard-shell";
     app.innerHTML = `${renderHeader()}${renderScorecard()}${renderPerformanceTable()}`;
     postRender();
+    state.sparklinesAnimated = true;
   }
 }
 
@@ -3293,6 +3295,7 @@ app.addEventListener("click", (event) => {
     const platform = control.dataset.platform;
     if (platform && platform !== state.platform) {
       state.platform = platform;
+      state.sparklinesAnimated = false;
       state.data.source = "loading";
       state.data.message = "Loading platform data...";
       state.openControl = null;

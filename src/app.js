@@ -832,7 +832,6 @@ function renderHeader() {
         </div>
         <section class="top-actions" aria-label="Dashboard actions">
           ${dateFilterHtml}
-          ${renderUserAuthBadge()}
           <div class="dept-mark">DEPT<span>®</span></div>
         </section>
       </section>
@@ -2771,6 +2770,7 @@ function renderScorecard() {
           <h1>Overall Scorecard View</h1>
         </div>
         <div class="scorecard-head-status">
+          ${renderUserAuthBadge()}
           <span class="data-source-indicator${sourceTone()}">${dataSourceLabel()}</span>
         </div>
       </div>

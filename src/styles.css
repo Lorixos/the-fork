@@ -474,8 +474,10 @@ button:focus-visible {
 
 .scorecard-head-status {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   align-items: flex-end;
+  gap: 8px;
+  justify-content: flex-end;
   padding-bottom: 12px;
 }
 
@@ -2445,6 +2447,7 @@ button:focus-visible {
 
   .scorecard-head-status {
     justify-content: flex-start;
+    align-items: flex-start;
     padding-bottom: 0;
   }
 

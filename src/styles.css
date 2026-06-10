@@ -3936,7 +3936,7 @@ button:focus-visible {
 .user-email {
   font-size: 0.62rem;
   color: var(--muted);
-  max-width: 130px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

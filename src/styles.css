@@ -2080,12 +2080,21 @@ button:focus-visible {
   box-shadow: 0 16px 30px rgba(3, 47, 40, 0.13), 0 0 0 1px rgba(124, 244, 92, 0.16);
 }
 
+.metric-card.metric-negative:hover {
+  border-color: rgba(230, 64, 53, 0.4);
+  box-shadow: 0 16px 30px rgba(3, 47, 40, 0.13), 0 0 0 1px rgba(255, 94, 126, 0.16);
+}
+
 .metric-glow {
   position: absolute;
   inset: 0 auto 0 0;
   width: 4px;
   background: linear-gradient(180deg, var(--lime), var(--green-500));
   opacity: 0.85;
+}
+
+.metric-negative .metric-glow {
+  background: linear-gradient(180deg, #ff5e7e, #e64035);
 }
 
 .metric-title {

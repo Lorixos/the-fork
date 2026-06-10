@@ -3966,6 +3966,38 @@ button:focus-visible {
   height: 14px;
 }
 
+/* User auth badge colors inside the scorecard */
+.scorecard .user-name {
+  color: #ffffff;
+}
+
+.scorecard .user-email {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.scorecard .user-auth-badge {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.scorecard .user-auth-badge:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.scorecard .sign-out-btn {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.scorecard .sign-out-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--lime);
+}
+
+.scorecard .sign-out-btn img {
+  filter: brightness(0) invert(1);
+}
+
 /* Responsive Login Layout */
 @media (max-width: 960px) {
   .login-visual-panel {

@@ -116,7 +116,7 @@ const filterConfig = [
 function getMetricsForPlatform() {
   if (state.platform === "tiktok") {
     return [
-      { section: "media", label: "Cost", valueKey: "spend", previousKey: "prevSpend", format: "compactCurrency", featured: true, timelineKey: "costTimeline", positiveWhenDown: true },
+      { section: "media", label: "Cost", valueKey: "spend", previousKey: "prevSpend", format: "compactCurrency", featured: true, timelineKey: "costTimeline", isNeutral: true },
       { section: "media", label: "Impressions", valueKey: "impressions", previousKey: "prevImpressions", format: "compact", featured: true, timelineKey: "impressionsTimeline" },
       { section: "media", label: "CPM", valueKey: "cpm", previousKey: "prevCpm", format: "currency", positiveWhenDown: true },
       { section: "media", label: "Link Clicks", valueKey: "linkClicks", previousKey: "prevLinkClicks", format: "compact" },
@@ -135,7 +135,7 @@ function getMetricsForPlatform() {
 
   // Default (Meta)
   return [
-    { section: "media", label: "Cost", valueKey: "spend", previousKey: "prevSpend", format: "compactCurrency", featured: true, timelineKey: "costTimeline", positiveWhenDown: true },
+    { section: "media", label: "Cost", valueKey: "spend", previousKey: "prevSpend", format: "compactCurrency", featured: true, timelineKey: "costTimeline", isNeutral: true },
     { section: "media", label: "Impressions", valueKey: "impressions", previousKey: "prevImpressions", format: "compact", featured: true, timelineKey: "impressionsTimeline" },
     { section: "media", label: "CPM", valueKey: "cpm", previousKey: "prevCpm", format: "currency", positiveWhenDown: true },
     { section: "media", label: "Link Clicks", valueKey: "linkClicks", previousKey: "prevLinkClicks", format: "compact" },
@@ -559,6 +559,7 @@ function formatValue(metric) {
 function deltaTone(metric) {
   const delta = metricDelta(metric);
   if (!Number.isFinite(delta)) return "empty";
+  if (metric.isNeutral) return "neutral";
   const isGood = metric.positiveWhenDown ? delta < 0 : delta > 0;
   return isGood ? "positive" : "negative";
 }

@@ -2085,6 +2085,11 @@ button:focus-visible {
   box-shadow: 0 16px 30px rgba(3, 47, 40, 0.13), 0 0 0 1px rgba(255, 94, 126, 0.16);
 }
 
+.metric-card.metric-neutral:hover {
+  border-color: rgba(97, 113, 107, 0.4);
+  box-shadow: 0 16px 30px rgba(3, 47, 40, 0.13), 0 0 0 1px rgba(97, 113, 107, 0.16);
+}
+
 .metric-glow {
   position: absolute;
   inset: 0 auto 0 0;
@@ -2095,6 +2100,10 @@ button:focus-visible {
 
 .metric-negative .metric-glow {
   background: linear-gradient(180deg, #ff5e7e, #e64035);
+}
+
+.metric-neutral .metric-glow {
+  background: linear-gradient(180deg, #b0c2bb, #7a8c86);
 }
 
 .metric-title {
@@ -2301,6 +2310,10 @@ button:focus-visible {
   opacity: 0.5;
 }
 
+.metric-neutral .metric-delta img {
+  opacity: 0.5;
+}
+
 .metric-timeline {
   height: 52px;
   margin-right: -14px;
@@ -2397,6 +2410,12 @@ button:focus-visible {
 }
 
 .metric-empty .metric-delta {
+  background: rgba(97, 113, 107, 0.1);
+  color: var(--muted);
+  border: 1px solid rgba(97, 113, 107, 0.2);
+}
+
+.metric-neutral .metric-delta {
   background: rgba(97, 113, 107, 0.1);
   color: var(--muted);
   border: 1px solid rgba(97, 113, 107, 0.2);

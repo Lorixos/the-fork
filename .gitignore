@@ -9,3 +9,5 @@ test-results/
 __pycache__/
 *.pyc
 .env
+.firebase/
+

@@ -1,4 +1,33 @@
 {
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "The Fork",
+        "supportEmail": "lorik.osmani@deptagency.com",
+        "authorizedRedirectUris": [
+          "http://localhost",
+          "https://thefork-dept.web.app",
+          "https://thefork-dept.firebaseapp.com",
+          "https://byte-data-management.firebaseapp.com",
+          "https://byte-data-management.web.app"
+        ]
+      }
+    }
+  },
+  "hosting": {
+    "site": "thefork-dept",
+    "public": "public",
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "the-fork",
+          "region": "europe-west4"
+        }
+      }
+    ]
+  },
   "apphosting": {
     "backendId": "the-fork",
     "rootDir": "./",
@@ -11,3 +40,4 @@
     ]
   }
 }
+

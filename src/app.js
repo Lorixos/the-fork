@@ -1417,7 +1417,9 @@ function renderMetric(metric, index) {
   const timeline = timelinePoints ? renderTimeline(timelinePoints, index, metric) : "";
   const cardIcon = metricIcons[metric.label] || "activity";
   
-  const numberAnimClass = state.tabSwitched ? " animate-number" : "";
+  const rawVal = metricValue(metric);
+  const isFiniteVal = Number.isFinite(rawVal) && !(rawVal === 0 && metric.valueKey === "lpvRate");
+  const numberAnimClass = state.tabSwitched && isFiniteVal ? " animate-number" : "";
 
   return `
     <article class="metric-card metric-${tone}${featured}" 
@@ -1430,7 +1432,7 @@ function renderMetric(metric, index) {
       </div>
       <div class="metric-main-row">
         <div class="metric-number-stack">
-          <strong class="${numberAnimClass}">${value}</strong>
+          <strong class="${numberAnimClass}" data-value="${isFiniteVal ? rawVal : ""}" data-format="${metric.format || ""}">${value}</strong>
           <span class="metric-delta">
             <img src="${iconUrl(arrow)}" alt="" />
             <span>${delta}</span>
@@ -3537,7 +3539,65 @@ function postRender() {
     initCalendarPicker();
   }
   updateActiveIndicators();
+  animateScorecardNumbers();
 }
+
+function animateScorecardNumbers() {
+  const elements = document.querySelectorAll("strong.animate-number");
+  elements.forEach((el) => {
+    const rawVal = parseFloat(el.getAttribute("data-value"));
+    if (isNaN(rawVal)) return;
+    const format = el.getAttribute("data-format");
+    
+    // Set to 0 immediately to prevent flashing the final value during the delay
+    el.textContent = formatValueForAnimation(0, format);
+    
+    const card = el.closest(".metric-card");
+    const delayStyle = card ? card.style.getPropertyValue("--delay") : "";
+    const delay = delayStyle ? parseInt(delayStyle, 10) : 0;
+    
+    const duration = 650;
+    const startVal = 0;
+    const endVal = rawVal;
+    
+    let startTime = null;
+    
+    function step(timestamp) {
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      const easedProgress = 1 - Math.pow(1 - progress, 4);
+      const currentVal = startVal + (endVal - startVal) * easedProgress;
+      el.textContent = formatValueForAnimation(currentVal, format);
+      
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        el.textContent = formatValueForAnimation(endVal, format);
+      }
+    }
+    
+    if (delay > 0) {
+      setTimeout(() => {
+        requestAnimationFrame(step);
+      }, delay);
+    } else {
+      requestAnimationFrame(step);
+    }
+  });
+}
+
+function formatValueForAnimation(val, format) {
+  if (format === "compactCurrency") return formatLocalCompactCurrency(val);
+  if (format === "compact") {
+    return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(val);
+  }
+  if (format === "currency") return formatLocalCurrency(val, 2);
+  if (format === "percent") return `${val.toFixed(2).replace(/\.00$/, "")}%`;
+  return new Intl.NumberFormat("en").format(Math.round(val));
+}
+
 
 function updateActiveIndicators() {
   // 1. Market Rail indicator

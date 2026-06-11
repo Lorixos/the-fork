@@ -22,6 +22,7 @@ const state = {
   commentarySaving: false,
   commentaryAuthor: "Dept team",
   commentaryEditMode: false,
+  pacingTab: "monthly",
   currentUser: null,
   authError: null,
   authLoading: false,
@@ -36,6 +37,18 @@ const state = {
   originalCampaignBudgets: {},
   budgetsSaving: false,
   sparklinesAnimated: false,
+  activePacingCampaign: null,
+  activePacingDateField: null,
+  miniCalYear: 2026,
+  miniCalMonth: 6,
+  recentDateRanges: (() => {
+    try {
+      const saved = localStorage.getItem("thefork_recent_date_ranges");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  })(),
 };
 
 const markets = [
@@ -293,7 +306,10 @@ function normalizeRow(row) {
   return {
     dateStart: firstValue(row, ["date_start", "date", "week_start", "start_date"]),
     dateEnd: firstValue(row, ["date_end", "week_end", "end_date"]),
-    market: String(firstValue(row, ["market", "country_code", "country", "market_code"]) || "").toUpperCase(),
+    market: (() => {
+      const m = String(firstValue(row, ["market", "country_code", "country", "market_code"]) || "").toUpperCase();
+      return m === "GB" ? "UK" : m;
+    })(),
     objective: firstValue(row, ["objective", "campaign_objective"]) || "ACQ",
     target: firstValue(row, ["target", "audience", "targeting"]) || "Broad",
     campaign: firstValue(row, ["campaign"]) || firstValue(row, ["campaign_name"]) || "Booking-ASC",
@@ -2593,6 +2609,188 @@ function calculatePacingDetails(spend, budget, elapsedPct) {
   };
 }
 
+function recordRecentPacingRange(start, end) {
+  if (!start || !end) return;
+  if (!state.recentDateRanges) {
+    state.recentDateRanges = [];
+  }
+  // Filter out any matching range to keep items distinct
+  state.recentDateRanges = state.recentDateRanges.filter(r => !(r.start === start && r.end === end));
+  // Add to front
+  state.recentDateRanges.unshift({ start, end });
+  // Limit to top 10
+  state.recentDateRanges = state.recentDateRanges.slice(0, 10);
+  try {
+    localStorage.setItem("thefork_recent_date_ranges", JSON.stringify(state.recentDateRanges));
+  } catch (e) {
+    console.error("Failed to save recent date ranges:", e);
+  }
+}
+
+function getRecentlySavedPacingRanges() {
+  if (!state.recentDateRanges || state.recentDateRanges.length === 0) {
+    const ranges = [];
+    Object.keys(state.campaignBudgets || {}).forEach(cName => {
+      const b = state.campaignBudgets[cName];
+      if (b && b.start_date && b.end_date) {
+        ranges.push({ start: b.start_date, end: b.end_date });
+      }
+    });
+    Object.keys(state.originalCampaignBudgets || {}).forEach(cName => {
+      const b = state.originalCampaignBudgets[cName];
+      if (b && b.start_date && b.end_date) {
+        ranges.push({ start: b.start_date, end: b.end_date });
+      }
+    });
+
+    const seen = new Set();
+    const distinct = [];
+    ranges.forEach(r => {
+      const key = `${r.start}_${r.end}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        distinct.push(r);
+      }
+    });
+
+    distinct.sort((a, b) => b.start.localeCompare(a.start) || b.end.localeCompare(a.end));
+    state.recentDateRanges = distinct.slice(0, 10);
+  }
+  return state.recentDateRanges.slice(0, 3);
+}
+
+function getMiniCalendarDays(year, month) {
+  const firstDayIndex = new Date(year, month - 1, 1).getDay();
+  const startDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+  const totalDays = new Date(year, month, 0).getDate();
+  const prevMonthTotalDays = new Date(year, month - 1, 0).getDate();
+  const days = [];
+  
+  for (let i = startDay - 1; i >= 0; i--) {
+    days.push({
+      day: prevMonthTotalDays - i,
+      month: month === 1 ? 12 : month - 1,
+      year: month === 1 ? year - 1 : year,
+      isCurrentMonth: false
+    });
+  }
+  for (let i = 1; i <= totalDays; i++) {
+    days.push({
+      day: i,
+      month: month,
+      year: year,
+      isCurrentMonth: true
+    });
+  }
+  const remaining = 42 - days.length;
+  for (let i = 1; i <= remaining; i++) {
+    days.push({
+      day: i,
+      month: month === 12 ? 1 : month + 1,
+      year: month === 12 ? year + 1 : year,
+      isCurrentMonth: false
+    });
+  }
+  return days;
+}
+
+function formatDisplayDateShort(dateStr) {
+  if (!dateStr) return "";
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const y = parts[0];
+  const m = months[parseInt(parts[1], 10) - 1];
+  const d = parts[2];
+  return `${d} ${m} ${y.substring(2)}`;
+}
+
+
+function renderPacingDatePickerPopup(row) {
+  const fieldType = state.activePacingDateField; // "start" or "end"
+  const recentRanges = getRecentlySavedPacingRanges();
+  const days = getMiniCalendarDays(state.miniCalYear, state.miniCalMonth);
+  const currentVal = fieldType === "start" ? row.startDateStr : row.endDateStr;
+  
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthYearLabel = `${monthNames[state.miniCalMonth - 1]} ${state.miniCalYear}`;
+
+  const daysHtml = days.map(d => {
+    const dStr = `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+    const isSelected = dStr === currentVal;
+    
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const isToday = dStr === todayStr;
+    
+    return `
+      <button 
+        type="button" 
+        class="mini-cal-day ${d.isCurrentMonth ? 'is-current' : 'is-other'} ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}" 
+        data-action="select-pacing-mini-date" 
+        data-date="${dStr}"
+      >
+        ${d.day}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="pacing-calendar-popover is-align-${fieldType}">
+      <div class="popover-arrow"></div>
+      
+      <!-- Top Section: Quick Dates -->
+      <div class="pacing-quick-dates">
+        <span class="quick-title">Quick Select Saved Dates</span>
+        <div class="quick-buttons">
+          ${recentRanges.length > 0 
+            ? recentRanges.map(r => `
+                <button 
+                  class="quick-date-btn" 
+                  type="button" 
+                  data-action="apply-recent-pacing-range" 
+                  data-start="${r.start}" 
+                  data-end="${r.end}"
+                  title="Apply ${r.start} to ${r.end}"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  <span>${formatDisplayDateShort(r.start)} – ${formatDisplayDateShort(r.end)}</span>
+                </button>
+              `).join("")
+            : `<div class="quick-no-dates">No saved date ranges found yet</div>`
+          }
+        </div>
+      </div>
+      
+      <div class="popover-divider"></div>
+      
+      <!-- Middle Section: Calendar Grid -->
+      <div class="pacing-mini-calendar">
+        <div class="mini-cal-header">
+          <button class="mini-cal-nav" type="button" data-action="mini-cal-prev" aria-label="Previous Month">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <span class="mini-cal-title">${monthYearLabel}</span>
+          <button class="mini-cal-nav" type="button" data-action="mini-cal-next" aria-label="Next Month">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+        
+        <div class="mini-cal-weekdays">
+          <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+        </div>
+        
+        <div class="mini-cal-grid">
+          ${daysHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderPacingView() {
   let maxDateStr = "2026-01-01";
   state.data.rows.forEach(r => {
@@ -2744,11 +2942,6 @@ function renderPacingView() {
   });
 
   const unsaved = hasUnsavedBudgets();
-  const saveBtnHtml = unsaved
-    ? `<button class="pacing-save-btn ${state.budgetsSaving ? "is-saving" : ""}" data-action="save-budgets" ${state.budgetsSaving ? "disabled" : ""}>
-         ${state.budgetsSaving ? '<span class="pacing-spinner"></span> Saving...' : 'Save Budgets'}
-       </button>`
-    : '';
 
   let totalYesterdaySpend = 0;
   let totalMonthlyBudget = 0;
@@ -2767,222 +2960,330 @@ function renderPacingView() {
   const totalMDetails = calculatePacingDetails(totalMonthlySpend, totalMonthlyBudget, monthlyElapsedPct);
   const totalLDetails = calculatePacingDetails(totalLifetimeSpend, totalLifetimeBudget, 100);
 
+  const monthName = new Date(yMonth, mMonth - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  // Render Table Rows based on selected sub-tab
+  const isMonthly = state.pacingTab !== "lifetime";
+  
   const rowsHtml = campaignPacingRows.map((r, i) => {
-    return `
+    if (isMonthly) {
+      return `
+        <tr>
+          <td class="row-number">${i + 1}.</td>
+          <td class="is-left is-wide" style="font-weight: 700; color: #101815;">
+            ${r.name}
+            <span class="pacing-obj-badge">${r.objective}</span>
+          </td>
+          <td class="is-right" style="font-weight: 600;">${formatCurrency(r.yesterdaySpend)}</td>
+          <td class="is-right">
+            <div class="budget-input-wrapper">
+              <input 
+                type="text" 
+                class="pacing-monthly-budget-input" 
+                value="${Math.round(r.monthlyBudget)}" 
+                data-campaign="${r.name}"
+                aria-label="Monthly budget for ${r.name}"
+              />
+            </div>
+          </td>
+          <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.monthlySpend)}</td>
+          <td class="is-right">
+            <div class="pacing-bar-container is-right-aligned">
+              <div class="pacing-progress-wrap">
+                <div class="pacing-track">
+                  <div class="pacing-bar ${r.monthlyStatusClass}" style="width: ${Math.min(100, r.monthlySpentPct)}%"></div>
+                  <div class="pacing-marker" style="left: ${monthlyElapsedPct}%" title="Target Elapsed Time: ${Math.round(monthlyElapsedPct)}%"></div>
+                </div>
+              </div>
+              <span style="font-weight: 700;">${Math.round(r.monthlySpentPct)}%</span>
+            </div>
+          </td>
+          <td class="is-center">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.85rem; color: ${r.monthlyStatusClass === "is-over" ? "#d32f2f" : (r.monthlyStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.monthlyPacingPercent}%</span>
+              <span class="pacing-status-badge ${r.monthlyStatusClass}">
+                <span class="pulse-dot"></span>
+                ${r.monthlyStatus === "On Track" ? "On Track" : (r.monthlyStatus === "Under-spending" ? "Under" : "Over")}
+              </span>
+            </div>
+          </td>
+        </tr>
+      `;
+    } else {
+      return `
+        <tr>
+          <td class="row-number">${i + 1}.</td>
+          <td class="is-left is-wide" style="font-weight: 700; color: #101815;">
+            ${r.name}
+            <span class="pacing-obj-badge">${r.objective}</span>
+          </td>
+          <td class="is-center">
+            <div class="pacing-dates-container" style="position: relative;">
+              <div class="date-input-group" data-campaign="${r.name}" data-field="start">
+                <label>Start</label>
+                <input 
+                  type="text" 
+                  readonly
+                  class="pacing-start-date-input" 
+                  value="${r.startDateStr ? formatDisplayDateShort(r.startDateStr) : ''}" 
+                  data-campaign="${r.name}" 
+                  data-raw-value="${r.startDateStr || ''}"
+                  aria-label="Start date for ${r.name}"
+                />
+                <img src="${iconUrl("calendar")}" class="date-custom-icon" alt="" />
+              </div>
+              <div class="date-input-group" data-campaign="${r.name}" data-field="end">
+                <label>End</label>
+                <input 
+                  type="text" 
+                  readonly
+                  class="pacing-end-date-input" 
+                  value="${r.endDateStr ? formatDisplayDateShort(r.endDateStr) : ''}" 
+                  data-campaign="${r.name}" 
+                  data-raw-value="${r.endDateStr || ''}"
+                  aria-label="End date for ${r.name}"
+                />
+                <img src="${iconUrl("calendar")}" class="date-custom-icon" alt="" />
+              </div>
+              ${state.activePacingCampaign === r.name ? renderPacingDatePickerPopup(r) : ''}
+            </div>
+          </td>
+          <td class="is-right">
+            <div class="budget-input-wrapper">
+              <input 
+                type="text" 
+                class="pacing-budget-input" 
+                value="${Math.round(r.lifetimeBudget)}" 
+                data-campaign="${r.name}"
+                aria-label="Lifetime budget for ${r.name}"
+              />
+            </div>
+          </td>
+          <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.lifetimeSpend)}</td>
+          <td class="is-right">
+            <div class="pacing-bar-container is-right-aligned">
+              <div class="pacing-progress-wrap">
+                <div class="pacing-track">
+                  <div class="pacing-bar ${r.lifetimeStatusClass}" style="width: ${Math.min(100, r.lifetimeSpentPct)}%"></div>
+                  <div class="pacing-marker" style="left: ${r.lifetimeElapsedPct}%" title="Target Elapsed Time: ${Math.round(r.lifetimeElapsedPct)}%"></div>
+                </div>
+              </div>
+              <span style="font-weight: 700;">${Math.round(r.lifetimeSpentPct)}%</span>
+            </div>
+          </td>
+          <td class="is-center">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.85rem; color: ${r.lifetimeStatusClass === "is-over" ? "#d32f2f" : (r.lifetimeStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.lifetimePacingPercent}%</span>
+              <span class="pacing-status-badge ${r.lifetimeStatusClass}">
+                <span class="pulse-dot"></span>
+                ${r.lifetimeStatus === "On Track" ? "On Track" : (r.lifetimeStatus === "Under-spending" ? "Under" : "Over")}
+              </span>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+  }).join("");
+
+  const tableHeadersHtml = isMonthly
+    ? `
       <tr>
-        <td class="row-number">${i + 1}.</td>
-        <td class="is-left is-wide" style="font-weight: 700; color: #101815;">
-          ${r.name}
-          <span class="pacing-obj-badge">${r.objective}</span>
-        </td>
-        <td class="is-center">
-          <div class="pacing-dates-container">
-            <div class="date-input-group">
-              <label>Start</label>
-              <input 
-                type="date" 
-                class="pacing-start-date-input" 
-                value="${r.startDateStr}" 
-                data-campaign="${r.name}" 
-                aria-label="Start date for ${r.name}"
-              />
-            </div>
-            <div class="date-input-group">
-              <label>End</label>
-              <input 
-                type="date" 
-                class="pacing-end-date-input" 
-                value="${r.endDateStr}" 
-                data-campaign="${r.name}" 
-                aria-label="End date for ${r.name}"
-              />
-            </div>
-          </div>
-        </td>
-        <td class="is-right" style="font-weight: 600;">${formatCurrency(r.yesterdaySpend)}</td>
-        
-        <!-- Monthly Pacing Columns -->
-        <td class="is-right">
-          <div class="budget-input-wrapper">
-            <input 
-              type="text" 
-              class="pacing-monthly-budget-input" 
-              value="${Math.round(r.monthlyBudget)}" 
-              data-campaign="${r.name}"
-              aria-label="Monthly budget for ${r.name}"
-            />
-          </div>
-        </td>
-        <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.monthlySpend)}</td>
+        <th class="row-number" aria-label="Row number"></th>
+        <th class="is-left is-wide">Campaign Name</th>
+        <th class="is-right" style="width: 130px;">Yesterday Spend</th>
+        <th class="is-right" style="width: 140px;">Monthly Budget</th>
+        <th class="is-right" style="width: 130px;">Monthly Spend</th>
+        <th class="is-right" style="width: 160px;">Spent %</th>
+        <th class="is-center" style="width: 170px;">Pacing vs Target</th>
+      </tr>
+    `
+    : `
+      <tr>
+        <th class="row-number" aria-label="Row number"></th>
+        <th class="is-left is-wide">Campaign Name</th>
+        <th class="is-center" style="width: 220px; min-width: 220px;">Campaign Dates</th>
+        <th class="is-right" style="width: 140px;">Lifetime Budget</th>
+        <th class="is-right" style="width: 130px;">Lifetime Spend</th>
+        <th class="is-right" style="width: 160px;">Spent %</th>
+        <th class="is-center" style="width: 170px;">Pacing vs Target</th>
+      </tr>
+    `;
+
+  const tableFootersHtml = isMonthly
+    ? `
+      <tr>
+        <td class="row-number"></td>
+        <td class="is-left is-wide" style="font-weight: 880;">Grand total</td>
+        <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</td>
+        <td class="is-right" style="font-weight: 880;">${formatCurrency(totalMonthlyBudget)}</td>
+        <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalMonthlySpend)}</td>
         <td class="is-right">
           <div class="pacing-bar-container is-right-aligned">
             <div class="pacing-progress-wrap">
               <div class="pacing-track">
-                <div class="pacing-bar ${r.monthlyStatusClass}" style="width: ${Math.min(100, r.monthlySpentPct)}%"></div>
+                <div class="pacing-bar ${totalMDetails.statusClass}" style="width: ${Math.min(100, totalMDetails.spentPct)}%"></div>
                 <div class="pacing-marker" style="left: ${monthlyElapsedPct}%" title="Target Elapsed Time: ${Math.round(monthlyElapsedPct)}%"></div>
               </div>
             </div>
-            <span style="font-weight: 700;">${Math.round(r.monthlySpentPct)}%</span>
+            <span style="font-weight: 880;">${Math.round(totalMDetails.spentPct)}%</span>
           </div>
         </td>
         <td class="is-center">
           <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span style="font-weight: 700; font-size: 0.85rem; color: ${r.monthlyStatusClass === "is-over" ? "#d32f2f" : (r.monthlyStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.monthlyPacingPercent}%</span>
-            <span class="pacing-status-badge ${r.monthlyStatusClass}">
+            <span style="font-weight: 880; font-size: 0.85rem; color: ${totalMDetails.statusClass === "is-over" ? "#d32f2f" : (totalMDetails.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalMDetails.pacingPercent}%</span>
+            <span class="pacing-status-badge ${totalMDetails.statusClass}">
               <span class="pulse-dot"></span>
-              ${r.monthlyStatus === "On Track" ? "On Track" : (r.monthlyStatus === "Under-spending" ? "Under" : "Over")}
+              ${totalMDetails.status === "On Track" ? "On Track" : (totalMDetails.status === "Under-spending" ? "Under" : "Over")}
             </span>
           </div>
         </td>
-
-        <!-- Lifetime Pacing Columns -->
-        <td class="is-right">
-          <div class="budget-input-wrapper">
-            <input 
-              type="text" 
-              class="pacing-budget-input" 
-              value="${Math.round(r.lifetimeBudget)}" 
-              data-campaign="${r.name}"
-              aria-label="Lifetime budget for ${r.name}"
-            />
-          </div>
-        </td>
-        <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.lifetimeSpend)}</td>
+      </tr>
+    `
+    : `
+      <tr>
+        <td class="row-number"></td>
+        <td class="is-left is-wide" style="font-weight: 880;">Grand total</td>
+        <td class="is-center"></td>
+        <td class="is-right" style="font-weight: 880;">${formatCurrency(totalLifetimeBudget)}</td>
+        <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalLifetimeSpend)}</td>
         <td class="is-right">
           <div class="pacing-bar-container is-right-aligned">
             <div class="pacing-progress-wrap">
               <div class="pacing-track">
-                <div class="pacing-bar ${r.lifetimeStatusClass}" style="width: ${Math.min(100, r.lifetimeSpentPct)}%"></div>
-                <div class="pacing-marker" style="left: ${r.lifetimeElapsedPct}%" title="Target Elapsed Time: ${Math.round(r.lifetimeElapsedPct)}%"></div>
+                <div class="pacing-bar ${totalLDetails.statusClass}" style="width: ${Math.min(100, totalLDetails.spentPct)}%"></div>
+                <div class="pacing-marker" style="left: 100%" title="Target Elapsed Time: 100%"></div>
               </div>
             </div>
-            <span style="font-weight: 700;">${Math.round(r.lifetimeSpentPct)}%</span>
+            <span style="font-weight: 880;">${Math.round(totalLDetails.spentPct)}%</span>
           </div>
         </td>
         <td class="is-center">
           <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span style="font-weight: 700; font-size: 0.85rem; color: ${r.lifetimeStatusClass === "is-over" ? "#d32f2f" : (r.lifetimeStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.lifetimePacingPercent}%</span>
-            <span class="pacing-status-badge ${r.lifetimeStatusClass}">
+            <span style="font-weight: 880; font-size: 0.85rem; color: ${totalLDetails.statusClass === "is-over" ? "#d32f2f" : (totalLDetails.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalLDetails.pacingPercent}%</span>
+            <span class="pacing-status-badge ${totalLDetails.statusClass}">
               <span class="pulse-dot"></span>
-              ${r.lifetimeStatus === "On Track" ? "On Track" : (r.lifetimeStatus === "Under-spending" ? "Under" : "Over")}
+              ${totalLDetails.status === "On Track" ? "On Track" : (totalLDetails.status === "Under-spending" ? "Under" : "Over")}
             </span>
           </div>
         </td>
       </tr>
     `;
-  }).join("");
 
-  const monthName = new Date(yMonth, mMonth - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  // Dynamic button triggers: transform the active tab button into a Save button when there are unsaved edits
+  let btnMonthlyHtml = "";
+  let btnLifetimeHtml = "";
+
+  if (isMonthly) {
+    if (unsaved) {
+      if (state.budgetsSaving) {
+        btnMonthlyHtml = `
+          <button class="pacing-toggle-btn is-active is-save-action is-saving" type="button" data-action="save-budgets" data-tab="monthly" disabled>
+            <span class="pacing-spinner"></span>
+            <span>Saving Budgets...</span>
+          </button>
+        `;
+      } else {
+        btnMonthlyHtml = `
+          <button class="pacing-toggle-btn is-active is-save-action" type="button" data-action="save-budgets" data-tab="monthly">
+            <img src="${iconUrl("save")}" alt="" style="width: 14px; height: 14px;" />
+            <span>Save Budgets</span>
+          </button>
+        `;
+      }
+    } else {
+      btnMonthlyHtml = `
+        <button class="pacing-toggle-btn is-active" type="button" data-action="pacing-tab" data-tab="monthly">
+          <img src="${iconUrl("calendar")}" alt="" style="width: 14px; height: 14px; opacity: 0.85;" />
+          <span>Monthly Budget Pacing</span>
+        </button>
+      `;
+    }
+    btnLifetimeHtml = `
+      <button class="pacing-toggle-btn" type="button" data-action="pacing-tab" data-tab="lifetime">
+        <img src="${iconUrl("activity")}" alt="" style="width: 14px; height: 14px; opacity: 0.85;" />
+        <span>Lifetime Campaign Pacing</span>
+      </button>
+    `;
+  } else {
+    if (unsaved) {
+      if (state.budgetsSaving) {
+        btnLifetimeHtml = `
+          <button class="pacing-toggle-btn is-active is-save-action is-saving" type="button" data-action="save-budgets" data-tab="lifetime" disabled>
+            <span class="pacing-spinner"></span>
+            <span>Saving Budgets...</span>
+          </button>
+        `;
+      } else {
+        btnLifetimeHtml = `
+          <button class="pacing-toggle-btn is-active is-save-action" type="button" data-action="save-budgets" data-tab="lifetime">
+            <img src="${iconUrl("save")}" alt="" style="width: 14px; height: 14px;" />
+            <span>Save Budgets</span>
+          </button>
+        `;
+      }
+    } else {
+      btnLifetimeHtml = `
+        <button class="pacing-toggle-btn is-active" type="button" data-action="pacing-tab" data-tab="lifetime">
+          <img src="${iconUrl("activity")}" alt="" style="width: 14px; height: 14px; opacity: 0.85;" />
+          <span>Lifetime Campaign Pacing</span>
+        </button>
+      `;
+    }
+    btnMonthlyHtml = `
+      <button class="pacing-toggle-btn" type="button" data-action="pacing-tab" data-tab="monthly">
+        <img src="${iconUrl("calendar")}" alt="" style="width: 14px; height: 14px; opacity: 0.85;" />
+        <span>Monthly Budget Pacing</span>
+      </button>
+    `;
+  }
 
   return `
     <div class="pacing-tab-container">
       <div class="pacing-header-row">
         <div class="pacing-meta-card">
-          <div class="meta-item">
-            <span class="meta-label">Selected Month</span>
-            <span class="meta-value">${monthName}</span>
+          <div class="pacing-meta-stats">
+            <div class="meta-item">
+              <span class="meta-label">Selected Month</span>
+              <span class="meta-value">${monthName}</span>
+            </div>
+            <div class="meta-divider"></div>
+            <div class="meta-item">
+              <span class="meta-label">Month Elapsed</span>
+              <span class="meta-value">${Math.round(monthlyElapsedPct)}%</span>
+            </div>
+            <div class="meta-divider"></div>
+            <div class="meta-item">
+              <span class="meta-label">Active Campaigns</span>
+              <span class="meta-value">${campaignPacingRows.length}</span>
+            </div>
+            <div class="meta-divider"></div>
+            <div class="meta-item">
+              <span class="meta-label">Yesterday's Total Spend</span>
+              <span class="meta-value" style="color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</span>
+            </div>
           </div>
-          <div class="meta-divider"></div>
-          <div class="meta-item">
-            <span class="meta-label">Month Elapsed</span>
-            <span class="meta-value">${Math.round(monthlyElapsedPct)}%</span>
-          </div>
-          <div class="meta-divider"></div>
-          <div class="meta-item">
-            <span class="meta-label">Active Campaigns</span>
-            <span class="meta-value">${campaignPacingRows.length}</span>
-          </div>
-          <div class="meta-divider"></div>
-          <div class="meta-item">
-            <span class="meta-label">Yesterday's Total Spend</span>
-            <span class="meta-value" style="color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</span>
+          
+          <div class="pacing-meta-controls">
+            <div class="pacing-view-toggle-wrap">
+              <div class="pacing-view-toggle">
+                ${btnMonthlyHtml}
+                ${btnLifetimeHtml}
+              </div>
+            </div>
           </div>
         </div>
-        ${saveBtnHtml}
       </div>
 
       <div class="table-scroll">
         <table class="performance-table is-tab-pacing">
           <thead>
-            <tr>
-              <th rowspan="2" class="row-number" aria-label="Row number"></th>
-              <th rowspan="2" class="is-left is-wide">Campaign Name</th>
-              <th rowspan="2" class="is-center" style="width: 220px; min-width: 220px;">Campaign Dates</th>
-              <th rowspan="2" class="is-right">Yesterday Spend</th>
-              <th colspan="4" class="pacing-group-header">Monthly Pacing (${monthName})</th>
-              <th colspan="4" class="pacing-group-header">Lifetime Pacing</th>
-            </tr>
-            <tr>
-              <!-- Monthly Group -->
-              <th class="is-right" style="width: 100px;">Budget</th>
-              <th class="is-right" style="width: 100px;">Spend</th>
-              <th class="is-right" style="width: 130px;">Spent %</th>
-              <th class="is-center" style="width: 140px;">Pacing vs Target</th>
-              <!-- Lifetime Group -->
-              <th class="is-right" style="width: 100px;">Budget</th>
-              <th class="is-right" style="width: 100px;">Spend</th>
-              <th class="is-right" style="width: 130px;">Spent %</th>
-              <th class="is-center" style="width: 140px;">Pacing vs Target</th>
-            </tr>
+            ${tableHeadersHtml}
           </thead>
           <tbody>
             ${rowsHtml}
           </tbody>
           <tfoot>
-            <tr>
-              <td class="row-number"></td>
-              <td class="is-left is-wide" style="font-weight: 880;">Grand total</td>
-              <td class="is-center"></td>
-              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</td>
-              
-              <!-- Monthly Totals -->
-              <td class="is-right" style="font-weight: 880;">${formatCurrency(totalMonthlyBudget)}</td>
-              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalMonthlySpend)}</td>
-              <td class="is-right">
-                <div class="pacing-bar-container is-right-aligned">
-                  <div class="pacing-progress-wrap">
-                    <div class="pacing-track">
-                      <div class="pacing-bar ${totalMDetails.statusClass}" style="width: ${Math.min(100, totalMDetails.spentPct)}%"></div>
-                      <div class="pacing-marker" style="left: ${monthlyElapsedPct}%" title="Target Elapsed Time: ${Math.round(monthlyElapsedPct)}%"></div>
-                    </div>
-                  </div>
-                  <span style="font-weight: 880;">${Math.round(totalMDetails.spentPct)}%</span>
-                </div>
-              </td>
-              <td class="is-center">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                  <span style="font-weight: 880; font-size: 0.85rem; color: ${totalMDetails.statusClass === "is-over" ? "#d32f2f" : (totalMDetails.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalMDetails.pacingPercent}%</span>
-                  <span class="pacing-status-badge ${totalMDetails.statusClass}">
-                    <span class="pulse-dot"></span>
-                    ${totalMDetails.status === "On Track" ? "On Track" : (totalMDetails.status === "Under-spending" ? "Under" : "Over")}
-                  </span>
-                </div>
-              </td>
-
-              <!-- Lifetime Totals -->
-              <td class="is-right" style="font-weight: 880;">${formatCurrency(totalLifetimeBudget)}</td>
-              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalLifetimeSpend)}</td>
-              <td class="is-right">
-                <div class="pacing-bar-container is-right-aligned">
-                  <div class="pacing-progress-wrap">
-                    <div class="pacing-track">
-                      <div class="pacing-bar ${totalLDetails.statusClass}" style="width: ${Math.min(100, totalLDetails.spentPct)}%"></div>
-                      <div class="pacing-marker" style="left: 100%" title="Target Elapsed Time: 100%"></div>
-                    </div>
-                  </div>
-                  <span style="font-weight: 880;">${Math.round(totalLDetails.spentPct)}%</span>
-                </div>
-              </td>
-              <td class="is-center">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                  <span style="font-weight: 880; font-size: 0.85rem; color: ${totalLDetails.statusClass === "is-over" ? "#d32f2f" : (totalLDetails.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalLDetails.pacingPercent}%</span>
-                  <span class="pacing-status-badge ${totalLDetails.statusClass}">
-                    <span class="pulse-dot"></span>
-                    ${totalLDetails.status === "On Track" ? "On Track" : (totalLDetails.status === "Under-spending" ? "Under" : "Over")}
-                  </span>
-                </div>
-              </td>
-            </tr>
+            ${tableFootersHtml}
           </tfoot>
         </table>
       </div>
@@ -3112,10 +3413,64 @@ function render() {
     app.className = "login-shell";
     app.innerHTML = renderLoginScreen();
   } else {
+    // Save scroll positions
+    const scrollContainers = document.querySelectorAll(".table-scroll");
+    const scrollPositions = Array.from(scrollContainers).map(el => ({
+      left: el.scrollLeft,
+      top: el.scrollTop
+    }));
+    const winTop = window.scrollY;
+    const winLeft = window.scrollX;
+
+    // Save active element focus and selection range
+    const activeEl = document.activeElement;
+    let focusCampaign = null;
+    let focusClass = null;
+    let selStart = 0;
+    let selEnd = 0;
+    
+    if (activeEl && activeEl.matches("input")) {
+      focusCampaign = activeEl.dataset.campaign;
+      focusClass = activeEl.className;
+      try {
+        selStart = activeEl.selectionStart;
+        selEnd = activeEl.selectionEnd;
+      } catch (e) {}
+    }
+
     app.className = "dashboard-shell";
     app.innerHTML = `${renderHeader()}${renderScorecard()}${renderPerformanceTable()}`;
     postRender();
     state.sparklinesAnimated = true;
+
+    // Force reflow/layout of the document to ensure DOM metrics are computed
+    void document.documentElement.scrollHeight;
+
+    // Restore scroll positions
+    const newContainers = document.querySelectorAll(".table-scroll");
+    newContainers.forEach((el, idx) => {
+      const pos = scrollPositions[idx];
+      if (pos) {
+        // Force reflow/layout of the scroll container specifically
+        void el.scrollWidth;
+        void el.scrollHeight;
+        el.scrollLeft = pos.left;
+        el.scrollTop = pos.top;
+      }
+    });
+    window.scrollTo(winLeft, winTop);
+
+    // Restore focus and cursor selection range
+    if (focusCampaign && focusClass) {
+      const classSelector = focusClass.split(' ').filter(c => c).map(c => `.${c}`).join('');
+      const newActive = document.querySelector(`${classSelector}[data-campaign="${focusCampaign}"]`);
+      if (newActive) {
+        newActive.focus();
+        try {
+          newActive.setSelectionRange(selStart, selEnd);
+        } catch (e) {}
+      }
+    }
   }
 }
 
@@ -3490,6 +3845,16 @@ document.addEventListener("click", (event) => {
     }
   }
 
+  // Close pacing calendar date picker if clicked outside
+  if (state.activePacingCampaign && event.target.isConnected) {
+    const datesContainer = event.target.closest(".pacing-dates-container");
+    if (!datesContainer) {
+      state.activePacingCampaign = null;
+      state.activePacingDateField = null;
+      render();
+    }
+  }
+
   if (!state.openControl) return;
   if (!event.target.isConnected) return; // Ignore clicks on nodes that were detached during re-render
 
@@ -3506,8 +3871,98 @@ document.addEventListener("click", (event) => {
 });
 
 app.addEventListener("click", (event) => {
+  // Pacing Date Popover click handlers
+  const dateGroup = event.target.closest(".date-input-group");
+  if (dateGroup) {
+    const campaignName = dateGroup.dataset.campaign;
+    const field = dateGroup.dataset.field; // "start" or "end"
+    
+    if (state.activePacingCampaign === campaignName && state.activePacingDateField === field) {
+      state.activePacingCampaign = null;
+      state.activePacingDateField = null;
+    } else {
+      state.activePacingCampaign = campaignName;
+      state.activePacingDateField = field;
+      
+      const input = dateGroup.querySelector("input");
+      const val = input.getAttribute("data-raw-value") || "";
+      const parts = val.split('-');
+      if (parts.length === 3) {
+        state.miniCalYear = parseInt(parts[0], 10);
+        state.miniCalMonth = parseInt(parts[1], 10);
+      } else {
+        const today = new Date();
+        state.miniCalYear = today.getFullYear();
+        state.miniCalMonth = today.getMonth() + 1;
+      }
+    }
+    render();
+    return;
+  }
+
   const control = event.target.closest("[data-action]");
   if (!control) return;
+
+  if (control.dataset.action === "mini-cal-prev") {
+    state.miniCalMonth--;
+    if (state.miniCalMonth < 1) {
+      state.miniCalMonth = 12;
+      state.miniCalYear--;
+    }
+    render();
+    return;
+  }
+
+  if (control.dataset.action === "mini-cal-next") {
+    state.miniCalMonth++;
+    if (state.miniCalMonth > 12) {
+      state.miniCalMonth = 1;
+      state.miniCalYear++;
+    }
+    render();
+    return;
+  }
+
+  if (control.dataset.action === "select-pacing-mini-date") {
+    const selectedDate = control.dataset.date;
+    const campaignName = state.activePacingCampaign;
+    const field = state.activePacingDateField;
+    
+    const obj = getCampaignBudgetsObject(campaignName);
+    if (field === "start") {
+      obj.start_date = selectedDate;
+    } else {
+      obj.end_date = selectedDate;
+    }
+    localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
+    
+    if (obj.start_date && obj.end_date) {
+      recordRecentPacingRange(obj.start_date, obj.end_date);
+    }
+    
+    state.activePacingCampaign = null;
+    state.activePacingDateField = null;
+    render();
+    return;
+  }
+
+  if (control.dataset.action === "apply-recent-pacing-range") {
+    const start = control.dataset.start;
+    const end = control.dataset.end;
+    const campaignName = state.activePacingCampaign;
+    
+    const obj = getCampaignBudgetsObject(campaignName);
+    obj.start_date = start;
+    obj.end_date = end;
+    localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
+    
+    recordRecentPacingRange(start, end);
+
+    state.activePacingCampaign = null;
+    state.activePacingDateField = null;
+    render();
+    return;
+  }
 
   if (control.dataset.action === "google-login") {
     handleGoogleLogin();
@@ -3566,6 +4021,12 @@ app.addEventListener("click", (event) => {
   if (control.dataset.action === "table-tab") {
     state.tableTab = control.dataset.tab;
     state.openControl = null;
+  }
+
+  if (control.dataset.action === "pacing-tab") {
+    state.pacingTab = control.dataset.tab;
+    render();
+    return;
   }
 
   if (control.dataset.action === "export") {
@@ -3697,20 +4158,6 @@ app.addEventListener("input", (event) => {
   }
 });
 
-app.addEventListener("change", (event) => {
-  if (event.target.matches(".commentary-week-input")) {
-    const week = parseInt(event.target.value, 10);
-    if (week >= 1 && week <= 53) {
-      const dates = getDateRangeOfWeek(week, 2026);
-      state.dateStart = dates.start;
-      state.dateEnd = dates.end;
-      syncFilterOptionsFromData();
-      state.exported = false;
-      loadCommentary();
-    }
-    return;
-  }
-
 function getCampaignBudgetsObject(campaignName) {
   if (!state.campaignBudgets[campaignName]) {
     state.campaignBudgets[campaignName] = { budget: 0, monthly_budget: 0, start_date: "", end_date: "" };
@@ -3724,6 +4171,20 @@ function getCampaignBudgetsObject(campaignName) {
   }
   return state.campaignBudgets[campaignName];
 }
+
+app.addEventListener("change", (event) => {
+  if (event.target.matches(".commentary-week-input")) {
+    const week = parseInt(event.target.value, 10);
+    if (week >= 1 && week <= 53) {
+      const dates = getDateRangeOfWeek(week, 2026);
+      state.dateStart = dates.start;
+      state.dateEnd = dates.end;
+      syncFilterOptionsFromData();
+      state.exported = false;
+      loadCommentary();
+    }
+    return;
+  }
 
   if (event.target.matches(".pacing-budget-input, .pacing-monthly-budget-input")) {
     const campaignName = event.target.dataset.campaign;

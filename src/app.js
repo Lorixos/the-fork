@@ -534,8 +534,28 @@ function aggregateRows(rows) {
     prevInstallCvr: ratio(prevInstalls, prevLinkClicks, 100),
     prevBookingCvr: ratio(prevBookings, prevLinkClicks, 100),
     prevCpb: ratio(prevSpend, prevBookings),
-    costTimeline: firstRow.costTimeline,
-    impressionsTimeline: firstRow.impressionsTimeline,
+    costTimeline: (() => {
+      const timeline = [0, 0, 0, 0, 0, 0, 0];
+      rows.forEach(r => {
+        if (Array.isArray(r.costTimeline)) {
+          for (let i = 0; i < 7; i++) {
+            timeline[i] += r.costTimeline[i] || 0;
+          }
+        }
+      });
+      return timeline;
+    })(),
+    impressionsTimeline: (() => {
+      const timeline = [0, 0, 0, 0, 0, 0, 0];
+      rows.forEach(r => {
+        if (Array.isArray(r.impressionsTimeline)) {
+          for (let i = 0; i < 7; i++) {
+            timeline[i] += r.impressionsTimeline[i] || 0;
+          }
+        }
+      });
+      return timeline;
+    })(),
     creativeImageUrl: firstRow.creativeImageUrl,
     creativeThumbnailUrl: firstRow.creativeThumbnailUrl,
     creativeLink: firstRow.creativeLink,
@@ -4298,12 +4318,19 @@ app.addEventListener("mousemove", (event) => {
   const valueEl = card.querySelector(".metric-number-stack strong");
   if (valueEl) valueEl.textContent = hoverValue;
 
-  // Ensure guide, dot and tooltip are hidden
+  // Show and position guide and dot
   const guide = timeline.querySelector(".timeline-guide");
   const dot = timeline.querySelector(".timeline-dot");
   const tooltip = timeline.querySelector(".timeline-tooltip");
-  if (guide) guide.style.display = "none";
-  if (dot) dot.style.display = "none";
+  if (guide) {
+    guide.style.display = "block";
+    guide.style.left = `${pt.x.toFixed(2)}%`;
+  }
+  if (dot) {
+    dot.style.display = "block";
+    dot.style.left = `${pt.x.toFixed(2)}%`;
+    dot.style.top = `${((pt.y / 48) * 100).toFixed(2)}%`;
+  }
   if (tooltip) tooltip.style.display = "none";
 });
 

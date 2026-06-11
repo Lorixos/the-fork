@@ -4693,3 +4693,97 @@ button:focus-visible {
   will-change: transform, opacity;
 }
 
+/* Premium Staggered Layout Transitions */
+
+/* Fade in the container instead of sliding the whole box */
+.animate-entry.table-scroll {
+  animation: fadeInOnly 0.3s ease-out forwards;
+}
+
+@keyframes fadeInOnly {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Staggered Row Entry for Performance Tables */
+.animate-entry .performance-table thead tr {
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.02s both;
+}
+
+.animate-entry .performance-table tbody tr {
+  opacity: 0;
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+}
+
+.animate-entry .performance-table tbody tr:nth-child(1) {
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both;
+}
+
+.animate-entry .performance-table tbody tr:nth-child(2) {
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.10s both;
+}
+
+.animate-entry .performance-table tbody tr:nth-child(3) {
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both;
+}
+
+.animate-entry .performance-table tbody tr:nth-child(4) {
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
+}
+
+.animate-entry .performance-table tbody tr:nth-child(5) {
+  animation: slideUpFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
+}
+
+/* Staggered Grid Card Entry for Charts Tab */
+.animate-entry.charts-tab-container {
+  animation: fadeInOnly 0.25s ease-out forwards;
+}
+
+.animate-entry .chart-card {
+  opacity: 0;
+}
+
+.animate-entry .chart-card:nth-child(1) {
+  animation: slideUpFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+}
+
+.animate-entry .chart-card:nth-child(2) {
+  animation: slideUpFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+}
+
+.animate-entry .chart-card:nth-child(3) {
+  animation: slideUpFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
+}
+
+.animate-entry .chart-card:nth-child(4) {
+  animation: slideUpFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+}
+
+/* Staggered Sections Entry for Pacing Tab */
+.animate-entry.pacing-tab-container {
+  animation: fadeInOnly 0.25s ease-out forwards;
+}
+
+.animate-entry.pacing-tab-container .pacing-header-row {
+  opacity: 0;
+  animation: slideUpFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+}
+
+.animate-entry.pacing-tab-container .table-scroll {
+  opacity: 0;
+  animation: slideUpFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+/* GPU Acceleration */
+.animate-entry .chart-card,
+.animate-entry.pacing-tab-container .pacing-header-row,
+.animate-entry.pacing-tab-container .table-scroll,
+.animate-entry .performance-table tr {
+  will-change: transform, opacity;
+}
+

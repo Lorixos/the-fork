@@ -1417,7 +1417,7 @@ function renderTimeline(points, index, metric) {
   const pointsJson = JSON.stringify(pointsData).replace(/"/g, '&quot;');
 
   return `
-    <div class="metric-timeline" data-points="${pointsJson}" data-metric="${metric.label}">
+    <div class="metric-timeline" data-points="${pointsJson}" data-metric="${metric.label}" data-format="${metric.format || ''}">
       <svg viewBox="0 0 100 48" preserveAspectRatio="none">
         <defs>
           <linearGradient id="${gradientId}" x1="0" x2="1" y1="0" y2="0">
@@ -4259,7 +4259,7 @@ app.addEventListener("mousemove", (event) => {
   const timeline = event.target.closest(".metric-timeline");
   if (!timeline) return;
 
-  const card = timeline.closest(".metric-card.metric-featured");
+  const card = timeline.closest(".metric-card");
   if (!card) return;
 
   const pointsData = JSON.parse(timeline.dataset.points || "[]");
@@ -4272,38 +4272,57 @@ app.addEventListener("mousemove", (event) => {
 
   const pt = pointsData[dayIndex];
 
+  const weekStart = new Date(`${state.dateStart}T00:00:00`);
+  const hoveredDate = new Date(weekStart.getTime() + dayIndex * 24 * 60 * 60 * 1000);
+  const dayLabel = hoveredDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  
+  const format = timeline.dataset.format || "";
+  let hoverValue = "";
+  if (format === "compactCurrency") {
+    hoverValue = formatLocalCompactCurrency(pt.value);
+  } else if (format === "compact") {
+    hoverValue = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(pt.value);
+  } else if (format === "currency") {
+    hoverValue = formatLocalCurrency(pt.value, 2);
+  } else if (format === "percent") {
+    hoverValue = `${pt.value.toFixed(2).replace(/\.00$/, "")}%`;
+  } else {
+    hoverValue = new Intl.NumberFormat("en").format(Math.round(pt.value));
+  }
+
+  // Update title to the hovered period nicely
+  const titleEl = card.querySelector(".metric-title p");
+  if (titleEl) titleEl.textContent = dayLabel;
+
+  // Update value to the hovered value
+  const valueEl = card.querySelector(".metric-number-stack strong");
+  if (valueEl) valueEl.textContent = hoverValue;
+
+  // Ensure guide, dot and tooltip are hidden
   const guide = timeline.querySelector(".timeline-guide");
   const dot = timeline.querySelector(".timeline-dot");
   const tooltip = timeline.querySelector(".timeline-tooltip");
-
-  if (guide && dot && tooltip) {
-    guide.style.left = pt.x + "%";
-    guide.style.display = "block";
-
-    dot.style.left = pt.x + "%";
-    dot.style.top = (pt.y / 48) * 100 + "%";
-    dot.style.display = "block";
-
-    const weekStart = new Date(`${state.dateStart}T00:00:00`);
-    const hoveredDate = new Date(weekStart.getTime() + dayIndex * 24 * 60 * 60 * 1000);
-    const dayLabel = hoveredDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    const metricType = timeline.dataset.metric;
-    const hoverValue = metricType === "Cost"
-      ? formatLocalCurrency(pt.value, 2)
-      : new Intl.NumberFormat("en").format(Math.round(pt.value));
-
-    tooltip.textContent = `${dayLabel} · ${hoverValue}`;
-    tooltip.style.left = `clamp(54px, ${pt.x}%, calc(100% - 54px))`;
-    tooltip.style.display = "block";
-  }
+  if (guide) guide.style.display = "none";
+  if (dot) dot.style.display = "none";
+  if (tooltip) tooltip.style.display = "none";
 });
 
 app.addEventListener("mouseout", (event) => {
-  const card = event.target.closest(".metric-card.metric-featured");
+  const card = event.target.closest(".metric-card");
   if (!card) return;
 
-  const related = event.relatedTarget ? event.relatedTarget.closest(".metric-card.metric-featured") : null;
+  const related = event.relatedTarget ? event.relatedTarget.closest(".metric-card") : null;
   if (related === card) return;
+
+  // Restore original label and value
+  const originalLabel = card.dataset.originalLabel;
+  const originalValue = card.dataset.originalValue;
+
+  const titleEl = card.querySelector(".metric-title p");
+  if (titleEl && originalLabel) titleEl.textContent = originalLabel;
+
+  const valueEl = card.querySelector(".metric-number-stack strong");
+  if (valueEl && originalValue) valueEl.textContent = originalValue;
 
   const timeline = card.querySelector(".metric-timeline");
   if (timeline) {

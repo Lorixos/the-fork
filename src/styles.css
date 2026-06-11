@@ -4610,3 +4610,10 @@ button:focus-visible {
   cursor: pointer;
 }
 
+/* Hide old sparkline overlay indicators to allow clean card-level dynamic data update */
+.timeline-guide,
+.timeline-dot,
+.timeline-tooltip {
+  display: none !important;
+}
+

@@ -37,6 +37,7 @@ const state = {
   originalCampaignBudgets: {},
   budgetsSaving: false,
   sparklinesAnimated: false,
+  tabSwitched: true,
   activePacingCampaign: null,
   activePacingDateField: null,
   miniCalYear: 2026,
@@ -837,6 +838,7 @@ function renderMarketRail() {
 
   return `
     <nav class="market-strip-compact" aria-label="Market selector">
+      <div class="market-active-indicator" style="opacity: 0;"></div>
       ${allButton}
       ${flags}
     </nav>
@@ -1062,6 +1064,8 @@ function initCalendarPicker() {
       if (tempStartDate && tempEndDate) {
         state.dateStart = tempStartDate;
         state.dateEnd = tempEndDate;
+        state.sparklinesAnimated = false;
+        state.tabSwitched = true;
         state.openControl = null;
         syncFilterOptionsFromData();
         state.exported = false;
@@ -1078,6 +1082,8 @@ function initCalendarPicker() {
 function applyPresetImmediately(start, end) {
   state.dateStart = start;
   state.dateEnd = end;
+  state.sparklinesAnimated = false;
+  state.tabSwitched = true;
   state.openControl = null;
   syncFilterOptionsFromData();
   state.exported = false;
@@ -2466,7 +2472,7 @@ function renderCpiCpbOverTimeChart(weeklyPacingTrend) {
   `;
 }
 
-function renderChartsView() {
+function renderChartsView(animateClass = "") {
   const trend = getWeeklyTrendData();
   
   if (trend.length === 0) {
@@ -2513,7 +2519,7 @@ function renderChartsView() {
   const cpiCpbOverTimeHtml = renderCpiCpbOverTimeChart(weeklyPacingTrend);
   
   return `
-    <div class="charts-tab-container">
+    <div class="charts-tab-container${animateClass}">
       <div id="chart-tooltip" class="chart-tooltip" style="opacity: 0; display: none;"></div>
  
       <div class="charts-grid">
@@ -2811,7 +2817,7 @@ function renderPacingDatePickerPopup(row) {
   `;
 }
 
-function renderPacingView() {
+function renderPacingView(animateClass = "") {
   let maxDateStr = "2026-01-01";
   state.data.rows.forEach(r => {
     if (r.dateEnd && r.dateEnd > maxDateStr) {
@@ -3258,7 +3264,7 @@ function renderPacingView() {
   }
 
   return `
-    <div class="pacing-tab-container">
+    <div class="pacing-tab-container${animateClass}">
       <div class="pacing-header-row">
         <div class="pacing-meta-card">
           <div class="pacing-meta-stats">
@@ -3286,6 +3292,7 @@ function renderPacingView() {
           <div class="pacing-meta-controls">
             <div class="pacing-view-toggle-wrap">
               <div class="pacing-view-toggle">
+                <div class="pacing-active-indicator" style="opacity: 0;"></div>
                 ${btnMonthlyHtml}
                 ${btnLifetimeHtml}
               </div>
@@ -3321,13 +3328,14 @@ function renderPerformanceTable() {
   const columns = performanceColumns.filter((col) => !col.isCreativeOnly || state.tableTab === "creative");
 
   let contentHtml = "";
+  const animateClass = state.tabSwitched ? " animate-entry" : "";
   if (state.tableTab === "charts") {
-    contentHtml = renderChartsView();
+    contentHtml = renderChartsView(animateClass);
   } else if (state.tableTab === "pacing") {
-    contentHtml = renderPacingView();
+    contentHtml = renderPacingView(animateClass);
   } else {
     contentHtml = `
-      <div class="table-scroll">
+      <div class="table-scroll${animateClass}">
         <table class="performance-table is-tab-${state.tableTab}">
           <thead>
             <tr>
@@ -3370,6 +3378,7 @@ function renderPerformanceTable() {
             <h2>${activeTab.label} ${state.tableTab === "charts" || state.tableTab === "pacing" ? "" : "Performance"}</h2>
           </div>
           <div class="table-tabs" role="tablist" aria-label="Performance table views">
+            <div class="tabs-active-indicator" style="opacity: 0;"></div>
             ${tableTabs
               .map((tab) => `
                 <button class="${tab.id === state.tableTab ? "is-active" : ""}" type="button" role="tab" data-action="table-tab" data-tab="${tab.id}" aria-selected="${tab.id === state.tableTab}">
@@ -3462,6 +3471,7 @@ function render() {
     app.innerHTML = `${renderHeader()}${renderScorecard()}${renderPerformanceTable()}`;
     postRender();
     state.sparklinesAnimated = true;
+    state.tabSwitched = false;
 
     // Force reflow/layout of the document to ensure DOM metrics are computed
     void document.documentElement.scrollHeight;
@@ -3499,6 +3509,59 @@ function postRender() {
   if (calendarMenu) {
     initCalendarPicker();
   }
+  updateActiveIndicators();
+}
+
+function updateActiveIndicators() {
+  // 1. Market Rail indicator
+  const marketStrip = document.querySelector(".market-strip-compact");
+  if (marketStrip) {
+    const activeBtn = marketStrip.querySelector(".flag-button.is-active");
+    const indicator = marketStrip.querySelector(".market-active-indicator");
+    if (activeBtn && indicator) {
+      requestAnimationFrame(() => {
+        indicator.style.width = `${activeBtn.offsetWidth}px`;
+        indicator.style.height = `${activeBtn.offsetHeight}px`;
+        indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
+        indicator.style.opacity = "1";
+      });
+    }
+  }
+
+  // 2. Segmented Pacing View Toggle indicator
+  const pacingToggle = document.querySelector(".pacing-view-toggle");
+  if (pacingToggle) {
+    const activeBtn = pacingToggle.querySelector(".pacing-toggle-btn.is-active");
+    const indicator = pacingToggle.querySelector(".pacing-active-indicator");
+    if (activeBtn && indicator) {
+      requestAnimationFrame(() => {
+        indicator.style.width = `${activeBtn.offsetWidth}px`;
+        indicator.style.height = `${activeBtn.offsetHeight}px`;
+        indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
+        indicator.style.opacity = "1";
+      });
+    }
+  }
+
+  // 3. Performance Tab Indicator
+  const tableTabsWrap = document.querySelector(".table-tabs");
+  if (tableTabsWrap) {
+    const activeBtn = tableTabsWrap.querySelector("button.is-active");
+    const indicator = tableTabsWrap.querySelector(".tabs-active-indicator");
+    if (activeBtn && indicator) {
+      requestAnimationFrame(() => {
+        indicator.style.width = `${activeBtn.offsetWidth}px`;
+        indicator.style.height = `${activeBtn.offsetHeight}px`;
+        indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
+        indicator.style.opacity = "1";
+      });
+    }
+  }
+}
+
+if (!window.hasResizeIndicatorListener) {
+  window.addEventListener("resize", updateActiveIndicators);
+  window.hasResizeIndicatorListener = true;
 }
 
 function setFilter(filterId, value) {
@@ -4006,6 +4069,8 @@ app.addEventListener("click", (event) => {
   if (control.dataset.action === "market") {
     state.market = control.dataset.market;
     state.openControl = null;
+    state.sparklinesAnimated = false;
+    state.tabSwitched = true;
     syncFilterOptionsFromData();
     state.exported = false;
     loadCommentary();
@@ -4022,6 +4087,8 @@ app.addEventListener("click", (event) => {
   if (control.dataset.action === "select-filter") {
     setFilter(control.dataset.filter, control.dataset.value);
     state.openControl = null;
+    state.sparklinesAnimated = false;
+    state.tabSwitched = true;
     syncFilterOptionsFromData();
     state.exported = false;
     loadCommentary();
@@ -4032,6 +4099,8 @@ app.addEventListener("click", (event) => {
     state.dateStart = control.dataset.start;
     state.dateEnd = control.dataset.end;
     state.openControl = null;
+    state.sparklinesAnimated = false;
+    state.tabSwitched = true;
     syncFilterOptionsFromData();
     state.exported = false;
     loadCommentary();
@@ -4041,10 +4110,12 @@ app.addEventListener("click", (event) => {
   if (control.dataset.action === "table-tab") {
     state.tableTab = control.dataset.tab;
     state.openControl = null;
+    state.tabSwitched = true;
   }
 
   if (control.dataset.action === "pacing-tab") {
     state.pacingTab = control.dataset.tab;
+    state.tabSwitched = true;
     render();
     return;
   }
@@ -4091,6 +4162,8 @@ app.addEventListener("click", (event) => {
       const [start, end] = value.split("|");
       state.dateStart = start;
       state.dateEnd = end;
+      state.sparklinesAnimated = false;
+      state.tabSwitched = true;
       syncFilterOptionsFromData();
       state.exported = false;
       loadCommentary();
@@ -4129,6 +4202,7 @@ app.addEventListener("click", (event) => {
     if (platform && platform !== state.platform) {
       state.platform = platform;
       state.sparklinesAnimated = false;
+      state.tabSwitched = true;
       state.data.source = "loading";
       state.data.message = "Loading platform data...";
       state.openControl = null;
@@ -4199,6 +4273,8 @@ app.addEventListener("change", (event) => {
       const dates = getDateRangeOfWeek(week, 2026);
       state.dateStart = dates.start;
       state.dateEnd = dates.end;
+      state.sparklinesAnimated = false;
+      state.tabSwitched = true;
       syncFilterOptionsFromData();
       state.exported = false;
       loadCommentary();

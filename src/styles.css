@@ -357,6 +357,23 @@ button:focus-visible {
   justify-content: space-between;
   flex-shrink: 1;
   min-width: 0;
+  position: relative;
+}
+
+/* Sliding active indicator for markets */
+.market-active-indicator {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), 
+              width 0.3s cubic-bezier(0.25, 1, 0.5, 1), 
+              height 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 0.2s ease;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .market-strip-compact .flag-button {
@@ -376,6 +393,8 @@ button:focus-visible {
   flex-grow: 1;
   flex-shrink: 1;
   min-width: 0;
+  position: relative;
+  z-index: 2;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -394,9 +413,9 @@ button:focus-visible {
 }
 
 .market-strip-compact .flag-button.is-active {
-  background: #ffffff;
-  color: var(--green-950);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  background: transparent !important;
+  color: var(--green-950) !important;
+  box-shadow: none !important;
   font-weight: 800;
 }
 
@@ -1766,6 +1785,23 @@ button:focus-visible {
   border-radius: 16px;
   background: rgba(3, 47, 40, 0.28);
   box-shadow: inset 0 1px 2px rgba(3, 47, 40, 0.22);
+  position: relative;
+}
+
+/* Sliding active indicator for table views */
+.tabs-active-indicator {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 12px 26px rgba(3, 47, 40, 0.18);
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), 
+              width 0.3s cubic-bezier(0.25, 1, 0.5, 1), 
+              height 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 0.2s ease;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .table-tabs button {
@@ -1783,14 +1819,20 @@ button:focus-visible {
   font-size: 0.9rem;
   font-weight: 780;
   cursor: pointer;
+  position: relative;
+  z-index: 2;
   transition: background 170ms ease, color 170ms ease, box-shadow 170ms ease;
 }
 
-.table-tabs button:hover,
+.table-tabs button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
 .table-tabs button.is-active {
-  background: #fff;
-  color: var(--green-900);
-  box-shadow: 0 12px 26px rgba(3, 47, 40, 0.18);
+  background: transparent !important;
+  color: var(--green-900) !important;
+  box-shadow: none !important;
 }
 
 .table-tabs img {
@@ -2959,6 +3001,23 @@ button:focus-visible {
   border-radius: 14px;
   border: 1px solid rgba(3, 47, 40, 0.08);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+  position: relative;
+}
+
+/* Sliding active indicator for pacing */
+.pacing-active-indicator {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(3, 47, 40, 0.08);
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), 
+              width 0.3s cubic-bezier(0.25, 1, 0.5, 1), 
+              height 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 0.2s ease;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .pacing-toggle-btn {
@@ -2975,6 +3034,8 @@ button:focus-visible {
   font-weight: 700;
   cursor: pointer;
   border-radius: 10px;
+  position: relative;
+  z-index: 2;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
@@ -3004,10 +3065,10 @@ button:focus-visible {
   opacity: 0.9;
 }
 
-.pacing-toggle-btn.is-active {
-  background: #ffffff;
+.pacing-toggle-btn.is-active:not(.is-save-action) {
+  background: transparent !important;
   color: #028a4f;
-  box-shadow: 0 4px 12px rgba(3, 47, 40, 0.08);
+  box-shadow: none !important;
 }
 
 .pacing-toggle-btn.is-active img {
@@ -4613,5 +4674,22 @@ button:focus-visible {
 /* Hide old sparkline tooltip to allow clean card-level dynamic data update */
 .timeline-tooltip {
   display: none !important;
+}
+
+/* Fluid fade-in slide-up animations for tab content switching */
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-entry {
+  animation: slideUpFadeIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
 }
 

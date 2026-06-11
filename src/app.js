@@ -1367,7 +1367,7 @@ function formatDateDDMMYYYY(dStr) {
 
 function renderOptionMenu(filter, menuClass) {
   return `
-    <div class="${menuClass}" role="listbox" aria-label="${filter.label}">
+    <div class="${menuClass} is-${filter.id}" role="listbox" aria-label="${filter.label}">
       ${filter.options
         .map((option) => `
           <button class="filter-option${option === state[filter.id] ? " is-selected" : ""}" type="button" data-action="select-filter" data-filter="${filter.id}" data-value="${option}" role="option" aria-selected="${option === state[filter.id]}">

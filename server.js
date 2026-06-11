@@ -44,7 +44,7 @@ function normalizeMarket(m) {
   const mUpper = m.toUpperCase();
   if (mUpper.includes('6982545611807555586') || mUpper.includes('FR') || mUpper.includes('LAFOURCHETTE')) return 'FR';
   if (mUpper.includes('6982545462632906753') || mUpper.includes('ES')) return 'ES';
-  if (mUpper.includes('7015602279810138113') || mUpper.includes('GB') || mUpper.includes('UNITED KINGDOM') || mUpper.includes('CO.UK')) return 'GB';
+  if (mUpper.includes('7015602279810138113') || mUpper.includes('GB') || mUpper.includes('UNITED KINGDOM') || mUpper.includes('CO.UK')) return 'UK';
   if (mUpper.includes('7190030035821166594') || mUpper.includes('BE')) return 'BE';
   if (mUpper.includes('7071236272924262402') || mUpper.includes('AU')) return 'AU';
   if (mUpper.includes('AT')) return 'AT';

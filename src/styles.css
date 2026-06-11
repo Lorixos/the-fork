@@ -292,7 +292,7 @@ button:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 32px;
   margin: -12px 0 32px;
   padding-bottom: 24px;

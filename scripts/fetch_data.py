@@ -15,7 +15,7 @@ def normalize_market(m):
     if '6982545462632906753' in m_upper or 'ES' in m_upper:
         return 'ES'
     if '7015602279810138113' in m_upper or 'GB' in m_upper or 'UNITED KINGDOM' in m_upper or 'CO.UK' in m_upper:
-        return 'GB'
+        return 'UK'
     if '7190030035821166594' in m_upper or 'BE' in m_upper:
         return 'BE'
     if '7071236272924262402' in m_upper or 'AU' in m_upper:

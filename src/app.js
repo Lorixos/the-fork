@@ -2122,9 +2122,9 @@ function renderWeeklyTrendChart(trend) {
           </defs>
           
           ${gridLines.join("")}
-          ${spendAreaPath ? `<path d="${spendAreaPath}" fill="url(#spendGrad)" />` : ""}
-          ${spendPath ? `<path d="${spendPath}" fill="none" stroke="url(#spendLineGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ""}
-          ${convPath ? `<path d="${convPath}" fill="none" stroke="url(#convLineGrad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,4" />` : ""}
+          ${spendAreaPath ? `<path class="trend-area spend-area" d="${spendAreaPath}" fill="url(#spendGrad)" />` : ""}
+          ${spendPath ? `<path class="trend-line is-solid spend-line" d="${spendPath}" fill="none" stroke="url(#spendLineGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+          ${convPath ? `<path class="trend-line is-dashed conv-line" d="${convPath}" fill="none" stroke="url(#convLineGrad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,4" />` : ""}
           ${guideLinesHtml}
           ${nodesHtml}
           <line x1="${padLeft}" y1="${height - padBot}" x2="${width - padRight}" y2="${height - padBot}" stroke="rgba(3, 47, 40, 0.08)" stroke-width="1" />
@@ -2339,8 +2339,8 @@ function renderAdTypePerformanceChart(adTypeData) {
           </defs>
           ${gridLines.join("")}
           ${columnsHtml}
-          ${cpiPath ? `<path d="${cpiPath}" fill="none" stroke="url(#cpiAdGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />` : ""}
-          ${cpbPath ? `<path d="${cpbPath}" fill="none" stroke="url(#cpbAdGrad)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3,3" />` : ""}
+          ${cpiPath ? `<path class="trend-line is-solid cpi-line" d="${cpiPath}" fill="none" stroke="url(#cpiAdGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+          ${cpbPath ? `<path class="trend-line is-dashed cpb-line" d="${cpbPath}" fill="none" stroke="url(#cpbAdGrad)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3,3" />` : ""}
           ${nodesHtml}
           <line x1="${padLeft}" y1="${height - padBot}" x2="${width - padRight}" y2="${height - padBot}" stroke="rgba(3, 47, 40, 0.08)" stroke-width="1" />
         </svg>
@@ -2473,10 +2473,10 @@ function renderCpiCpbOverTimeChart(weeklyPacingTrend) {
             </linearGradient>
           </defs>
           ${gridLines.join("")}
-          ${cpiAreaPath ? `<path d="${cpiAreaPath}" fill="url(#cpiAreaGrad)" />` : ""}
-          ${cpbAreaPath ? `<path d="${cpbAreaPath}" fill="url(#cpbAreaGrad)" />` : ""}
-          ${cpiPath ? `<path d="${cpiPath}" fill="none" stroke="url(#cpiLineGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ""}
-          ${cpbPath ? `<path d="${cpbPath}" fill="none" stroke="url(#cpbLineGrad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,2" />` : ""}
+          ${cpiAreaPath ? `<path class="trend-area cpi-area" d="${cpiAreaPath}" fill="url(#cpiAreaGrad)" />` : ""}
+          ${cpbAreaPath ? `<path class="trend-area cpb-area" d="${cpbAreaPath}" fill="url(#cpbAreaGrad)" />` : ""}
+          ${cpiPath ? `<path class="trend-line is-solid cpi-line" d="${cpiPath}" fill="none" stroke="url(#cpiLineGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+          ${cpbPath ? `<path class="trend-line is-dashed cpb-line" d="${cpbPath}" fill="none" stroke="url(#cpbLineGrad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,2" />` : ""}
           ${guideLinesHtml}
           ${nodesHtml}
           <line x1="${padLeft}" y1="${height - padBot}" x2="${width - padRight}" y2="${height - padBot}" stroke="rgba(3, 47, 40, 0.08)" stroke-width="1" />

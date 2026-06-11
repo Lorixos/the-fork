@@ -1416,6 +1416,8 @@ function renderMetric(metric, index) {
   const timelinePoints = aggregateData()[metric.timelineKey];
   const timeline = timelinePoints ? renderTimeline(timelinePoints, index, metric) : "";
   const cardIcon = metricIcons[metric.label] || "activity";
+  
+  const numberAnimClass = state.tabSwitched ? " animate-number" : "";
 
   return `
     <article class="metric-card metric-${tone}${featured}" 
@@ -1428,7 +1430,7 @@ function renderMetric(metric, index) {
       </div>
       <div class="metric-main-row">
         <div class="metric-number-stack">
-          <strong>${value}</strong>
+          <strong class="${numberAnimClass}">${value}</strong>
           <span class="metric-delta">
             <img src="${iconUrl(arrow)}" alt="" />
             <span>${delta}</span>

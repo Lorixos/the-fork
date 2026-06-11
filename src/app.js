@@ -123,7 +123,7 @@ const filterConfig = [
     id: "campaign",
     icon: "megaphone",
     label: "Campaign",
-    options: ["Booking", "Install"],
+    options: ["ALL"],
   },
 ];
 
@@ -312,7 +312,7 @@ function normalizeRow(row) {
     })(),
     objective: firstValue(row, ["objective", "campaign_objective"]) || "ACQ",
     target: firstValue(row, ["target", "audience", "targeting"]) || "Broad",
-    campaign: firstValue(row, ["campaign"]) || firstValue(row, ["campaign_name"]) || "Booking-ASC",
+    campaign: firstValue(row, ["campaign_name", "campaign"]) || "Booking-ASC",
     campaignName: firstValue(row, ["campaign_name", "campaign"]) || "Booking-ASC",
     creative: firstValue(row, ["creative", "creative_name", "ad_name", "asset_name", "adset_name"]),
     creativeImageUrl: firstValue(row, ["creative_image_url", "image_url"]),

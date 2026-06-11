@@ -267,7 +267,7 @@ app.get('/api/budgets', async (req, res) => {
 
   try {
     const sqlQuery = `
-      SELECT campaign_name, budget
+      SELECT campaign_name, budget, monthly_budget, start_date, end_date
       FROM \`${BUDGETS_TABLE_NAME}\`
       WHERE platform = @platform
     `;
@@ -280,7 +280,12 @@ app.get('/api/budgets', async (req, res) => {
     const [rows] = await bqClient.query(options);
     const budgets = {};
     rows.forEach(row => {
-      budgets[row.campaign_name] = row.budget;
+      budgets[row.campaign_name] = {
+        budget: row.budget || 0,
+        monthly_budget: row.monthly_budget || 0,
+        start_date: row.start_date || "",
+        end_date: row.end_date || ""
+      };
     });
 
     return res.status(200).json(budgets);
@@ -301,7 +306,10 @@ app.post('/api/budgets', async (req, res) => {
   try {
     const updates = Object.entries(budgets).map(([name, val]) => ({
       campaign_name: name,
-      budget: parseFloat(val)
+      budget: parseFloat(val.budget) || 0,
+      monthly_budget: parseFloat(val.monthly_budget) || 0,
+      start_date: val.start_date || "",
+      end_date: val.end_date || ""
     }));
 
     const sqlQuery = `
@@ -309,10 +317,16 @@ app.post('/api/budgets', async (req, res) => {
       USING UNNEST(@updates) S
       ON T.campaign_name = S.campaign_name AND T.platform = @platform
       WHEN MATCHED THEN
-        UPDATE SET budget = S.budget, updated_at = CURRENT_TIMESTAMP(), updated_by = @updated_by
+        UPDATE SET 
+          budget = S.budget, 
+          monthly_budget = S.monthly_budget,
+          start_date = S.start_date,
+          end_date = S.end_date,
+          updated_at = CURRENT_TIMESTAMP(), 
+          updated_by = @updated_by
       WHEN NOT MATCHED THEN
-        INSERT (campaign_name, platform, budget, updated_at, updated_by)
-        VALUES (S.campaign_name, @platform, S.budget, CURRENT_TIMESTAMP(), @updated_by)
+        INSERT (campaign_name, platform, budget, monthly_budget, start_date, end_date, updated_at, updated_by)
+        VALUES (S.campaign_name, @platform, S.budget, S.monthly_budget, S.start_date, S.end_date, CURRENT_TIMESTAMP(), @updated_by)
     `;
 
     const options = {
@@ -323,7 +337,13 @@ app.post('/api/budgets', async (req, res) => {
         updated_by
       },
       types: {
-        updates: [{ campaign_name: 'STRING', budget: 'FLOAT' }]
+        updates: [{ 
+          campaign_name: 'STRING', 
+          budget: 'FLOAT', 
+          monthly_budget: 'FLOAT',
+          start_date: 'STRING',
+          end_date: 'STRING'
+        }]
       }
     };
 
@@ -423,6 +443,19 @@ app.get('/api/performance', async (req, res) => {
         dateEndValStr = maxDayStr;
       }
 
+      const cost_timeline = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+      const impressions_timeline = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+      const wStartObj = new Date(weekStartStr + 'T00:00:00');
+      dailyRows.forEach(r => {
+        const rDayStr = r.day.value || r.day;
+        const rDayObj = new Date(rDayStr + 'T00:00:00');
+        const dayIdx = Math.round((rDayObj - wStartObj) / (1000 * 60 * 60 * 24));
+        if (dayIdx >= 0 && dayIdx < 7) {
+          cost_timeline[dayIdx] += parseFloat(r.costs || 0);
+          impressions_timeline[dayIdx] += parseFloat(r.impressions || 0);
+        }
+      });
+
       weeklyData[groupKey] = {
         date_start: weekStartStr,
         date_end: dateEndValStr,
@@ -445,7 +478,9 @@ app.get('/api/performance', async (req, res) => {
         video_views,
         video_completions,
         cta_installs,
-        cta_bookings
+        cta_bookings,
+        cost_timeline,
+        impressions_timeline
       };
     });
 

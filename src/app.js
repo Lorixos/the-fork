@@ -548,11 +548,11 @@ function formatValue(metric) {
   const value = metricValue(metric);
   if (!Number.isFinite(value) || value === 0 && metric.valueKey === "lpvRate") return "No data";
 
-  if (metric.format === "compactCurrency") return `${Math.round(value / 1000)}K EUR`;
+  if (metric.format === "compactCurrency") return formatLocalCompactCurrency(value);
   if (metric.format === "compact") {
     return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
   }
-  if (metric.format === "currency") return `${value.toFixed(2)} EUR`;
+  if (metric.format === "currency") return formatLocalCurrency(value, 2);
   if (metric.format === "percent") return `${value.toFixed(2).replace(/\.00$/, "")}%`;
   return new Intl.NumberFormat("en").format(Math.round(value));
 }
@@ -1727,8 +1727,7 @@ function formatTableValue(row, column) {
   if (column.key === "objective" || column.key === "groupLabel") return value || "-";
   if (!Number.isFinite(value) || value === 0 && (column.key === "videoViews" || column.key === "videoCompletionRate")) return "-";
   if (column.format === "currency") {
-    const maximumFractionDigits = value >= 100 ? 0 : 2;
-    return `${new Intl.NumberFormat("en", { maximumFractionDigits }).format(value)} EUR`;
+    return formatLocalCurrencyDecimals(value);
   }
   if (column.format === "percent") return `${value.toFixed(2).replace(/\.00$/, "")}%`;
   return new Intl.NumberFormat("en").format(Math.round(value));
@@ -1740,8 +1739,48 @@ function formatCompactNumber(value) {
   return Math.round(value);
 }
 
+function getMarketCurrency() {
+  if (state.market === "SE") {
+    return { symbol: " kr", position: "suffix" };
+  } else if (state.market === "UK" || state.market === "GB") {
+    return { symbol: "£", position: "prefix" };
+  } else {
+    return { symbol: " EUR", position: "suffix" };
+  }
+}
+
+function formatLocalCurrency(value, fractionDigits = 0) {
+  const c = getMarketCurrency();
+  const formatted = new Intl.NumberFormat("en", { 
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits 
+  }).format(value);
+  
+  if (c.position === "prefix") {
+    return `${c.symbol}${formatted}`;
+  } else {
+    return `${formatted}${c.symbol}`;
+  }
+}
+
+function formatLocalCurrencyDecimals(value) {
+  const maximumFractionDigits = value >= 100 ? 0 : 2;
+  return formatLocalCurrency(value, maximumFractionDigits);
+}
+
+function formatLocalCompactCurrency(value) {
+  const c = getMarketCurrency();
+  const roundedK = Math.round(value / 1000);
+  const formatted = `${roundedK}K`;
+  if (c.position === "prefix") {
+    return `${c.symbol}${formatted}`;
+  } else {
+    return `${formatted}${c.symbol}`;
+  }
+}
+
 function formatCurrency(value) {
-  return `${new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(value)} EUR`;
+  return formatLocalCurrency(value, 0);
 }
 
 function getWeeklyTrendData() {
@@ -2182,7 +2221,7 @@ function renderAdTypePerformanceChart(adTypeData) {
     gridLines.push(`
       <line x1="${padLeft}" y1="${y}" x2="${width - padRight}" y2="${y}" stroke="rgba(3, 47, 40, 0.03)" stroke-dasharray="4,4" />
       <text x="${padLeft - 8}" y="${y + 3}" text-anchor="end" class="chart-axis-text">${formatCompactNumber(ratio * maxCount)}</text>
-      <text x="${width - padRight + 8}" y="${y + 3}" text-anchor="start" class="chart-axis-text">${Math.round(ratio * maxCost)} EUR</text>
+      <text x="${width - padRight + 8}" y="${y + 3}" text-anchor="start" class="chart-axis-text">${formatLocalCurrency(Math.round(ratio * maxCost), 0)}</text>
     `);
   }
   
@@ -2296,7 +2335,7 @@ function renderCpiCpbOverTimeChart(weeklyPacingTrend) {
     const y = padTop + chartH - ratio * chartH;
     gridLines.push(`
       <line x1="${padLeft}" y1="${y}" x2="${width - padRight}" y2="${y}" stroke="rgba(3, 47, 40, 0.03)" stroke-dasharray="4,4" />
-      <text x="${padLeft - 8}" y="${y + 3}" text-anchor="end" class="chart-axis-text">${Math.round(ratio * maxCost)} EUR</text>
+      <text x="${padLeft - 8}" y="${y + 3}" text-anchor="end" class="chart-axis-text">${formatLocalCurrency(Math.round(ratio * maxCost), 0)}</text>
     `);
   }
   
@@ -2451,148 +2490,381 @@ function renderChartsView() {
   `;
 }
 
+function addDays(dateStr, days) {
+  const parts = dateStr.split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+  const date = new Date(y, m, d + days);
+  
+  const ry = date.getFullYear();
+  const rm = String(date.getMonth() + 1).padStart(2, '0');
+  const rd = String(date.getDate()).padStart(2, '0');
+  return `${ry}-${rm}-${rd}`;
+}
+
+function parseDateStr(str) {
+  const p = str.split('-');
+  return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+}
+
+function getDaysBetween(startStr, endStr) {
+  const s = parseDateStr(startStr);
+  const e = parseDateStr(endStr);
+  const diffTime = e - s;
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays + 1;
+}
+
+function getMonthlyElapsedPct(yearMonth, maxDateStr) {
+  const maxYM = maxDateStr.substring(0, 7);
+  if (yearMonth < maxYM) {
+    return 100;
+  } else if (yearMonth > maxYM) {
+    return 0;
+  } else {
+    const day = parseInt(maxDateStr.substring(8, 10), 10);
+    const ymParts = yearMonth.split('-');
+    const y = parseInt(ymParts[0], 10);
+    const m = parseInt(ymParts[1], 10);
+    const totalDays = new Date(y, m, 0).getDate();
+    return (day / totalDays) * 100;
+  }
+}
+
+function getLifetimeElapsedPct(startDateStr, endDateStr, maxDateStr) {
+  if (!startDateStr || !endDateStr) return 100;
+  if (maxDateStr < startDateStr) return 0;
+  if (maxDateStr > endDateStr) return 100;
+  
+  const totalDays = getDaysBetween(startDateStr, endDateStr);
+  if (totalDays <= 0) return 100;
+  
+  const elapsedDays = getDaysBetween(startDateStr, maxDateStr);
+  return (elapsedDays / totalDays) * 100;
+}
+
+function calculatePacingDetails(spend, budget, elapsedPct) {
+  if (budget <= 0) {
+    return {
+      expectedSpend: 0,
+      spentPct: 0,
+      pacingPercent: 0,
+      status: "On Track",
+      statusClass: "is-on-track",
+      remaining: 0,
+      projected: 0,
+      projectedPct: 0
+    };
+  }
+
+  const expectedSpend = budget * (elapsedPct / 100);
+  const spentPct = budget > 0 ? (spend / budget) * 100 : 0;
+  
+  let pacingRatio = 1.0;
+  if (expectedSpend > 0) {
+    pacingRatio = spend / expectedSpend;
+  }
+  const pacingPercent = Math.round(pacingRatio * 100);
+  
+  let status = "On Track";
+  let statusClass = "is-on-track";
+  if (pacingPercent < 95) {
+    status = "Under-spending";
+    statusClass = "is-under";
+  } else if (pacingPercent > 105) {
+    status = "Over-spending";
+    statusClass = "is-over";
+  }
+  
+  const remaining = Math.max(0, budget - spend);
+  const projected = elapsedPct > 0 ? (spend / (elapsedPct / 100)) : 0;
+  const projectedPct = budget > 0 ? (projected / budget) * 100 : 0;
+
+  return {
+    expectedSpend,
+    spentPct,
+    pacingPercent,
+    status,
+    statusClass,
+    remaining,
+    projected,
+    projectedPct
+  };
+}
+
 function renderPacingView() {
-  const campaignsMap = {};
+  let maxDateStr = "2026-01-01";
   state.data.rows.forEach(r => {
-    if (
+    if (r.dateEnd && r.dateEnd > maxDateStr) {
+      maxDateStr = r.dateEnd;
+    }
+  });
+
+  const yearMonth = state.dateStart ? state.dateStart.substring(0, 7) : maxDateStr.substring(0, 7);
+  
+  const ymParts = yearMonth.split('-');
+  const yMonth = parseInt(ymParts[0], 10);
+  const mMonth = parseInt(ymParts[1], 10);
+  const daysInMonth = new Date(yMonth, mMonth, 0).getDate();
+  const monthStartStr = `${yearMonth}-01`;
+  const monthEndStr = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
+
+  const monthlyElapsedPct = getMonthlyElapsedPct(yearMonth, maxDateStr);
+
+  const filteredRows = state.data.rows.filter(r => {
+    return (
       (state.market === "ALL" || r.market === state.market) &&
       (state.objective === "ALL" || r.objective === state.objective) &&
       (state.target === "ALL" || r.target === state.target) &&
       (state.campaign === "ALL" || r.campaign === state.campaign)
-    ) {
-      const name = r.campaignName || r.campaign;
-      if (!campaignsMap[name]) {
-        campaignsMap[name] = { 
-          name, 
-          spend: 0, 
-          objective: r.objective,
-          prevSpend: 0
-        };
+    );
+  });
+
+  const campaignsMap = {};
+  filteredRows.forEach(r => {
+    const name = r.campaignName || r.campaign;
+    if (!campaignsMap[name]) {
+      campaignsMap[name] = { 
+        name, 
+        objective: r.objective,
+        monthlySpend: 0,
+        lifetimeSpend: 0,
+        yesterdaySpend: 0,
+        totalSpend: 0
+      };
+    }
+    const cData = campaignsMap[name];
+    
+    const budgetObj = state.campaignBudgets[name] || {};
+    const campaignStartStr = budgetObj.start_date || "";
+    const campaignEndStr = budgetObj.end_date || "";
+
+    const timeline = Array.isArray(r.costTimeline) ? r.costTimeline : [];
+    const days = r.days_present || 7;
+    const timelineData = [...timeline];
+    if (timelineData.length === 0) {
+      const avg = r.spend / days;
+      for (let i = 0; i < 7; i++) {
+        timelineData.push(i < days ? avg : 0);
       }
-      campaignsMap[name].spend += r.spend || 0;
-      campaignsMap[name].prevSpend += r.prevSpend || 0;
+    }
+
+    for (let i = 0; i < 7; i++) {
+      const dayStr = addDays(r.dateStart, i);
+      const val = timelineData[i] || 0;
+
+      if (dayStr >= monthStartStr && dayStr <= monthEndStr) {
+        cData.monthlySpend += val;
+      }
+
+      if (campaignStartStr && campaignEndStr) {
+        if (dayStr >= campaignStartStr && dayStr <= campaignEndStr) {
+          cData.lifetimeSpend += val;
+        }
+      } else {
+        cData.lifetimeSpend += val;
+      }
+
+      if (dayStr === maxDateStr) {
+        cData.yesterdaySpend += val;
+      }
+
+      cData.totalSpend += val;
     }
   });
 
-  const campaigns = Object.values(campaignsMap).sort((a, b) => b.spend - a.spend);
-  
-  if (campaigns.length === 0) {
-    return `
-      <div class="pacing-empty" style="padding: 40px; text-align: center; color: rgba(20, 32, 28, 0.54);">
-        <p>No pacing data available for the selected filters.</p>
-      </div>
-    `;
-  }
+  const allCampaignNames = new Set([
+    ...Object.keys(campaignsMap),
+    ...Object.keys(state.campaignBudgets)
+  ]);
 
-  const elapsedPct = 68;
-  const unsaved = hasUnsavedBudgets();
-  const budgetHeaderHtml = unsaved
-    ? `<button class="pacing-save-btn ${state.budgetsSaving ? "is-saving" : ""}" data-action="save-budgets" ${state.budgetsSaving ? "disabled" : ""}>
-         ${state.budgetsSaving ? '<span class="pacing-spinner"></span> Saving...' : 'Save Budgets'}
-       </button>`
-    : 'Budget';
-  
-  const campaignPacingRows = campaigns.map((c) => {
-    const budget = state.campaignBudgets[c.name] !== undefined
-      ? state.campaignBudgets[c.name]
-      : Math.max(2000, Math.ceil((c.spend * 1.35) / 1000) * 1000);
-    const expectedSpend = budget * (elapsedPct / 100);
-    const spentPct = budget > 0 ? (c.spend / budget) * 100 : 0;
+  const activeCampaigns = [];
+  allCampaignNames.forEach(name => {
+    const cData = campaignsMap[name] || {
+      name,
+      objective: "Booking",
+      monthlySpend: 0,
+      lifetimeSpend: 0,
+      yesterdaySpend: 0,
+      totalSpend: 0
+    };
     
-    let pacingRatio = 1.0;
-    if (expectedSpend > 0) {
-      pacingRatio = c.spend / expectedSpend;
+    const budgetObj = state.campaignBudgets[name] || {};
+    const hasConfig = state.campaignBudgets[name] !== undefined;
+
+    if (cData.monthlySpend > 0 || hasConfig) {
+      activeCampaigns.push({
+        ...cData,
+        budgetObj
+      });
     }
+  });
+
+  activeCampaigns.sort((a, b) => (b.monthlySpend || b.totalSpend) - (a.monthlySpend || a.totalSpend));
+
+  const campaignPacingRows = activeCampaigns.map(c => {
+    const budgetObj = c.budgetObj;
     
-    const pacingPercent = Math.round(pacingRatio * 100);
-    
-    let status = "On Track";
-    let statusClass = "is-on-track";
-    if (pacingPercent < 90) {
-      status = "Under-spending";
-      statusClass = "is-under";
-    } else if (pacingPercent > 110) {
-      status = "Over-spending";
-      statusClass = "is-over";
-    }
-    
-    const remaining = Math.max(0, budget - c.spend);
-    const projected = c.spend / (elapsedPct / 100);
-    const projectedPct = budget > 0 ? (projected / budget) * 100 : 0;
+    const monthlyBudget = budgetObj.monthly_budget !== undefined ? budgetObj.monthly_budget : 0;
+    const budget = budgetObj.budget !== undefined 
+      ? budgetObj.budget 
+      : Math.max(2000, Math.ceil((c.totalSpend * 1.35) / 1000) * 1000);
+
+    const startDateStr = budgetObj.start_date || "";
+    const endDateStr = budgetObj.end_date || "";
+
+    const mDetails = calculatePacingDetails(c.monthlySpend, monthlyBudget, monthlyElapsedPct);
+
+    const lifetimeElapsedPct = getLifetimeElapsedPct(startDateStr, endDateStr, maxDateStr);
+    const lDetails = calculatePacingDetails(c.lifetimeSpend, budget, lifetimeElapsedPct);
 
     return {
       name: c.name,
       objective: c.objective,
-      budget,
-      spend: c.spend,
-      spentPct,
-      pacingPercent,
-      remaining,
-      projected,
-      projectedPct,
-      status,
-      statusClass
+      startDateStr,
+      endDateStr,
+      yesterdaySpend: c.yesterdaySpend,
+      
+      monthlyBudget,
+      monthlySpend: c.monthlySpend,
+      monthlySpentPct: mDetails.spentPct,
+      monthlyPacingPercent: mDetails.pacingPercent,
+      monthlyStatus: mDetails.status,
+      monthlyStatusClass: mDetails.statusClass,
+      
+      lifetimeBudget: budget,
+      lifetimeSpend: c.lifetimeSpend,
+      lifetimeSpentPct: lDetails.spentPct,
+      lifetimePacingPercent: lDetails.pacingPercent,
+      lifetimeStatus: lDetails.status,
+      lifetimeStatusClass: lDetails.statusClass,
+      lifetimeElapsedPct
     };
   });
 
-  const totalBudget = campaignPacingRows.reduce((sum, r) => sum + r.budget, 0);
-  const totalSpend = campaignPacingRows.reduce((sum, r) => sum + r.spend, 0);
-  const totalRemaining = campaignPacingRows.reduce((sum, r) => sum + r.remaining, 0);
-  const totalProjected = campaignPacingRows.reduce((sum, r) => sum + r.projected, 0);
-  const totalSpentPct = totalBudget > 0 ? (totalSpend / totalBudget) * 100 : 0;
-  const totalProjectedPct = totalBudget > 0 ? (totalProjected / totalBudget) * 100 : 0;
-  
-  const totalExpected = totalBudget * (elapsedPct / 100);
-  const totalPacingRatio = totalExpected > 0 ? totalSpend / totalExpected : 1.0;
-  const totalPacingPercent = Math.round(totalPacingRatio * 100);
-  
-  let totalStatus = "On Track";
-  let totalStatusClass = "is-on-track";
-  if (totalPacingPercent < 90) {
-    totalStatus = "Under-spending";
-    totalStatusClass = "is-under";
-  } else if (totalPacingPercent > 110) {
-    totalStatus = "Over-spending";
-    totalStatusClass = "is-over";
-  }
+  const unsaved = hasUnsavedBudgets();
+  const saveBtnHtml = unsaved
+    ? `<button class="pacing-save-btn ${state.budgetsSaving ? "is-saving" : ""}" data-action="save-budgets" ${state.budgetsSaving ? "disabled" : ""}>
+         ${state.budgetsSaving ? '<span class="pacing-spinner"></span> Saving...' : 'Save Budgets'}
+       </button>`
+    : '';
+
+  let totalYesterdaySpend = 0;
+  let totalMonthlyBudget = 0;
+  let totalMonthlySpend = 0;
+  let totalLifetimeBudget = 0;
+  let totalLifetimeSpend = 0;
+
+  campaignPacingRows.forEach(r => {
+    totalYesterdaySpend += r.yesterdaySpend;
+    totalMonthlyBudget += r.monthlyBudget;
+    totalMonthlySpend += r.monthlySpend;
+    totalLifetimeBudget += r.lifetimeBudget;
+    totalLifetimeSpend += r.lifetimeSpend;
+  });
+
+  const totalMDetails = calculatePacingDetails(totalMonthlySpend, totalMonthlyBudget, monthlyElapsedPct);
+  const totalLDetails = calculatePacingDetails(totalLifetimeSpend, totalLifetimeBudget, 100);
 
   const rowsHtml = campaignPacingRows.map((r, i) => {
     return `
       <tr>
         <td class="row-number">${i + 1}.</td>
-        <td class="is-left is-wide" style="font-weight: 700; color: #101815;">${r.name}</td>
+        <td class="is-left is-wide" style="font-weight: 700; color: #101815;">
+          ${r.name}
+          <span class="pacing-obj-badge">${r.objective}</span>
+        </td>
+        <td class="is-center">
+          <div class="pacing-dates-container">
+            <div class="date-input-group">
+              <label>Start</label>
+              <input 
+                type="date" 
+                class="pacing-start-date-input" 
+                value="${r.startDateStr}" 
+                data-campaign="${r.name}" 
+                aria-label="Start date for ${r.name}"
+              />
+            </div>
+            <div class="date-input-group">
+              <label>End</label>
+              <input 
+                type="date" 
+                class="pacing-end-date-input" 
+                value="${r.endDateStr}" 
+                data-campaign="${r.name}" 
+                aria-label="End date for ${r.name}"
+              />
+            </div>
+          </div>
+        </td>
+        <td class="is-right" style="font-weight: 600;">${formatCurrency(r.yesterdaySpend)}</td>
+        
+        <!-- Monthly Pacing Columns -->
+        <td class="is-right">
+          <div class="budget-input-wrapper">
+            <input 
+              type="text" 
+              class="pacing-monthly-budget-input" 
+              value="${Math.round(r.monthlyBudget)}" 
+              data-campaign="${r.name}"
+              aria-label="Monthly budget for ${r.name}"
+            />
+          </div>
+        </td>
+        <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.monthlySpend)}</td>
+        <td class="is-right">
+          <div class="pacing-bar-container is-right-aligned">
+            <div class="pacing-progress-wrap">
+              <div class="pacing-track">
+                <div class="pacing-bar ${r.monthlyStatusClass}" style="width: ${Math.min(100, r.monthlySpentPct)}%"></div>
+                <div class="pacing-marker" style="left: ${monthlyElapsedPct}%" title="Target Elapsed Time: ${Math.round(monthlyElapsedPct)}%"></div>
+              </div>
+            </div>
+            <span style="font-weight: 700;">${Math.round(r.monthlySpentPct)}%</span>
+          </div>
+        </td>
+        <td class="is-center">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span style="font-weight: 700; font-size: 0.85rem; color: ${r.monthlyStatusClass === "is-over" ? "#d32f2f" : (r.monthlyStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.monthlyPacingPercent}%</span>
+            <span class="pacing-status-badge ${r.monthlyStatusClass}">
+              <span class="pulse-dot"></span>
+              ${r.monthlyStatus === "On Track" ? "On Track" : (r.monthlyStatus === "Under-spending" ? "Under" : "Over")}
+            </span>
+          </div>
+        </td>
+
+        <!-- Lifetime Pacing Columns -->
         <td class="is-right">
           <div class="budget-input-wrapper">
             <input 
               type="text" 
               class="pacing-budget-input" 
-              value="${Math.round(r.budget)}" 
+              value="${Math.round(r.lifetimeBudget)}" 
               data-campaign="${r.name}"
-              aria-label="Edit budget for ${r.name}"
+              aria-label="Lifetime budget for ${r.name}"
             />
           </div>
         </td>
-        <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.spend)}</td>
+        <td class="is-right" style="font-weight: 600; color: #028a4f;">${formatCurrency(r.lifetimeSpend)}</td>
         <td class="is-right">
           <div class="pacing-bar-container is-right-aligned">
             <div class="pacing-progress-wrap">
               <div class="pacing-track">
-                <div class="pacing-bar ${r.statusClass}" style="width: ${Math.min(100, r.spentPct)}%"></div>
-                <div class="pacing-marker" style="left: ${elapsedPct}%" title="Target Elapsed Time: ${elapsedPct}%"></div>
+                <div class="pacing-bar ${r.lifetimeStatusClass}" style="width: ${Math.min(100, r.lifetimeSpentPct)}%"></div>
+                <div class="pacing-marker" style="left: ${r.lifetimeElapsedPct}%" title="Target Elapsed Time: ${Math.round(r.lifetimeElapsedPct)}%"></div>
               </div>
             </div>
-            <span style="font-weight: 700;">${Math.round(r.spentPct)}%</span>
+            <span style="font-weight: 700;">${Math.round(r.lifetimeSpentPct)}%</span>
           </div>
         </td>
-        <td class="is-right" style="opacity: 0.85;">${formatCurrency(r.remaining)}</td>
-        <td class="is-right" style="font-weight: 600;">${formatCurrency(r.projected)}</td>
-        <td class="is-right" style="font-weight: 700; color: ${r.projectedPct > 100 ? "#d32f2f" : "#101815"}">${Math.round(r.projectedPct)}%</td>
         <td class="is-center">
           <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span style="font-weight: 700; font-size: 0.85rem; color: ${r.statusClass === "is-over" ? "#d32f2f" : (r.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.pacingPercent}%</span>
-            <span class="pacing-status-badge ${r.statusClass}" style="padding: 3px 8px; font-size: 0.72rem; gap: 4px;">
-              <span class="pulse-dot" style="width: 5px; height: 5px;"></span>
-              ${r.status === "On Track" ? "On Track" : (r.status === "Under-spending" ? "Under" : "Over")}
+            <span style="font-weight: 700; font-size: 0.85rem; color: ${r.lifetimeStatusClass === "is-over" ? "#d32f2f" : (r.lifetimeStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${r.lifetimePacingPercent}%</span>
+            <span class="pacing-status-badge ${r.lifetimeStatusClass}">
+              <span class="pulse-dot"></span>
+              ${r.lifetimeStatus === "On Track" ? "On Track" : (r.lifetimeStatus === "Under-spending" ? "Under" : "Over")}
             </span>
           </div>
         </td>
@@ -2600,38 +2872,57 @@ function renderPacingView() {
     `;
   }).join("");
 
+  const monthName = new Date(yMonth, mMonth - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
   return `
     <div class="pacing-tab-container">
-      <div class="pacing-meta-card">
-        <div class="meta-item">
-          <span class="meta-label">Pacing Time Elapsed</span>
-          <span class="meta-value">${elapsedPct}%</span>
+      <div class="pacing-header-row">
+        <div class="pacing-meta-card">
+          <div class="meta-item">
+            <span class="meta-label">Selected Month</span>
+            <span class="meta-value">${monthName}</span>
+          </div>
+          <div class="meta-divider"></div>
+          <div class="meta-item">
+            <span class="meta-label">Month Elapsed</span>
+            <span class="meta-value">${Math.round(monthlyElapsedPct)}%</span>
+          </div>
+          <div class="meta-divider"></div>
+          <div class="meta-item">
+            <span class="meta-label">Active Campaigns</span>
+            <span class="meta-value">${campaignPacingRows.length}</span>
+          </div>
+          <div class="meta-divider"></div>
+          <div class="meta-item">
+            <span class="meta-label">Yesterday's Total Spend</span>
+            <span class="meta-value" style="color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</span>
+          </div>
         </div>
-        <div class="meta-divider"></div>
-        <div class="meta-item">
-          <span class="meta-label">Overall Budget Pacing</span>
-          <span class="meta-value" style="color: #028a4f;">${totalPacingPercent}%</span>
-        </div>
-        <div class="meta-divider"></div>
-        <div class="meta-item">
-          <span class="meta-label">Active Campaigns</span>
-          <span class="meta-value">${campaigns.length}</span>
-        </div>
+        ${saveBtnHtml}
       </div>
 
       <div class="table-scroll">
         <table class="performance-table is-tab-pacing">
           <thead>
             <tr>
-              <th class="row-number" aria-label="Row number"></th>
-              <th class="is-left is-wide">Campaign Name</th>
-              <th class="is-right">${budgetHeaderHtml}</th>
-              <th class="is-right">Spend</th>
-              <th class="is-right" style="width: 120px; min-width: 120px;">Spent %</th>
-              <th class="is-right">Remaining Budget</th>
-              <th class="is-right">Projected Spend</th>
-              <th class="is-right">Projected Spend %</th>
-              <th class="is-center" style="width: 160px; min-width: 160px;">Pacing vs Projected</th>
+              <th rowspan="2" class="row-number" aria-label="Row number"></th>
+              <th rowspan="2" class="is-left is-wide">Campaign Name</th>
+              <th rowspan="2" class="is-center" style="width: 220px; min-width: 220px;">Campaign Dates</th>
+              <th rowspan="2" class="is-right">Yesterday Spend</th>
+              <th colspan="4" class="pacing-group-header">Monthly Pacing (${monthName})</th>
+              <th colspan="4" class="pacing-group-header">Lifetime Pacing</th>
+            </tr>
+            <tr>
+              <!-- Monthly Group -->
+              <th class="is-right" style="width: 100px;">Budget</th>
+              <th class="is-right" style="width: 100px;">Spend</th>
+              <th class="is-right" style="width: 130px;">Spent %</th>
+              <th class="is-center" style="width: 140px;">Pacing vs Target</th>
+              <!-- Lifetime Group -->
+              <th class="is-right" style="width: 100px;">Budget</th>
+              <th class="is-right" style="width: 100px;">Spend</th>
+              <th class="is-right" style="width: 130px;">Spent %</th>
+              <th class="is-center" style="width: 140px;">Pacing vs Target</th>
             </tr>
           </thead>
           <tbody>
@@ -2641,28 +2932,53 @@ function renderPacingView() {
             <tr>
               <td class="row-number"></td>
               <td class="is-left is-wide" style="font-weight: 880;">Grand total</td>
-              <td class="is-right" style="font-weight: 880;">${new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(totalBudget)}</td>
-              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalSpend)}</td>
+              <td class="is-center"></td>
+              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</td>
+              
+              <!-- Monthly Totals -->
+              <td class="is-right" style="font-weight: 880;">${formatCurrency(totalMonthlyBudget)}</td>
+              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalMonthlySpend)}</td>
               <td class="is-right">
                 <div class="pacing-bar-container is-right-aligned">
                   <div class="pacing-progress-wrap">
                     <div class="pacing-track">
-                      <div class="pacing-bar ${totalStatusClass}" style="width: ${Math.min(100, totalSpentPct)}%"></div>
-                      <div class="pacing-marker" style="left: ${elapsedPct}%" title="Target Elapsed Time: ${elapsedPct}%"></div>
+                      <div class="pacing-bar ${totalMDetails.statusClass}" style="width: ${Math.min(100, totalMDetails.spentPct)}%"></div>
+                      <div class="pacing-marker" style="left: ${monthlyElapsedPct}%" title="Target Elapsed Time: ${Math.round(monthlyElapsedPct)}%"></div>
                     </div>
                   </div>
-                  <span style="font-weight: 880;">${Math.round(totalSpentPct)}%</span>
+                  <span style="font-weight: 880;">${Math.round(totalMDetails.spentPct)}%</span>
                 </div>
               </td>
-              <td class="is-right" style="font-weight: 880;">${formatCurrency(totalRemaining)}</td>
-              <td class="is-right" style="font-weight: 880;">${formatCurrency(totalProjected)}</td>
-              <td class="is-right" style="font-weight: 880; color: ${totalProjectedPct > 100 ? "#d32f2f" : "#101815"}">${Math.round(totalProjectedPct)}%</td>
               <td class="is-center">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                  <span style="font-weight: 880; font-size: 0.85rem; color: ${totalStatusClass === "is-over" ? "#d32f2f" : (totalStatusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalPacingPercent}%</span>
-                  <span class="pacing-status-badge ${totalStatusClass}" style="padding: 3px 8px; font-size: 0.72rem; gap: 4px;">
-                    <span class="pulse-dot" style="width: 5px; height: 5px;"></span>
-                    ${totalStatus === "On Track" ? "On Track" : (totalStatus === "Under-spending" ? "Under" : "Over")}
+                  <span style="font-weight: 880; font-size: 0.85rem; color: ${totalMDetails.statusClass === "is-over" ? "#d32f2f" : (totalMDetails.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalMDetails.pacingPercent}%</span>
+                  <span class="pacing-status-badge ${totalMDetails.statusClass}">
+                    <span class="pulse-dot"></span>
+                    ${totalMDetails.status === "On Track" ? "On Track" : (totalMDetails.status === "Under-spending" ? "Under" : "Over")}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Lifetime Totals -->
+              <td class="is-right" style="font-weight: 880;">${formatCurrency(totalLifetimeBudget)}</td>
+              <td class="is-right" style="font-weight: 880; color: #028a4f;">${formatCurrency(totalLifetimeSpend)}</td>
+              <td class="is-right">
+                <div class="pacing-bar-container is-right-aligned">
+                  <div class="pacing-progress-wrap">
+                    <div class="pacing-track">
+                      <div class="pacing-bar ${totalLDetails.statusClass}" style="width: ${Math.min(100, totalLDetails.spentPct)}%"></div>
+                      <div class="pacing-marker" style="left: 100%" title="Target Elapsed Time: 100%"></div>
+                    </div>
+                  </div>
+                  <span style="font-weight: 880;">${Math.round(totalLDetails.spentPct)}%</span>
+                </div>
+              </td>
+              <td class="is-center">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                  <span style="font-weight: 880; font-size: 0.85rem; color: ${totalLDetails.statusClass === "is-over" ? "#d32f2f" : (totalLDetails.statusClass === "is-under" ? "#b25e00" : "#028a4f")}">${totalLDetails.pacingPercent}%</span>
+                  <span class="pacing-status-badge ${totalLDetails.statusClass}">
+                    <span class="pulse-dot"></span>
+                    ${totalLDetails.status === "On Track" ? "On Track" : (totalLDetails.status === "Under-spending" ? "Under" : "Over")}
                   </span>
                 </div>
               </td>
@@ -2988,12 +3304,24 @@ async function saveCommentary() {
 function hasUnsavedBudgets() {
   const keys = new Set([...Object.keys(state.campaignBudgets), ...Object.keys(state.originalCampaignBudgets)]);
   for (const k of keys) {
-    const v1 = state.campaignBudgets[k];
-    const v2 = state.originalCampaignBudgets[k];
-    if (v1 !== v2) {
-      if (Math.round(v1 || 0) !== Math.round(v2 || 0)) {
-        return true;
-      }
+    const v1 = state.campaignBudgets[k] || {};
+    const v2 = state.originalCampaignBudgets[k] || {};
+    
+    const b1 = typeof v1 === "object" ? (v1.budget || 0) : v1;
+    const mb1 = typeof v1 === "object" ? (v1.monthly_budget || 0) : 0;
+    const sd1 = typeof v1 === "object" ? (v1.start_date || "") : "";
+    const ed1 = typeof v1 === "object" ? (v1.end_date || "") : "";
+
+    const b2 = typeof v2 === "object" ? (v2.budget || 0) : v2;
+    const mb2 = typeof v2 === "object" ? (v2.monthly_budget || 0) : 0;
+    const sd2 = typeof v2 === "object" ? (v2.start_date || "") : "";
+    const ed2 = typeof v2 === "object" ? (v2.end_date || "") : "";
+
+    if (Math.round(b1) !== Math.round(b2) ||
+        Math.round(mb1) !== Math.round(mb2) ||
+        sd1 !== sd2 ||
+        ed1 !== ed2) {
+      return true;
     }
   }
   return false;
@@ -3005,6 +3333,18 @@ async function loadBudgets() {
     if (response.ok) {
       const data = await response.json();
       state.campaignBudgets = data || {};
+      
+      for (const k in state.campaignBudgets) {
+        if (state.campaignBudgets[k] && typeof state.campaignBudgets[k] !== "object") {
+          state.campaignBudgets[k] = {
+            budget: parseFloat(state.campaignBudgets[k]) || 0,
+            monthly_budget: 0,
+            start_date: "",
+            end_date: ""
+          };
+        }
+      }
+      
       state.originalCampaignBudgets = JSON.parse(JSON.stringify(state.campaignBudgets));
     }
   } catch (error) {
@@ -3012,6 +3352,18 @@ async function loadBudgets() {
     try {
       const saved = localStorage.getItem("thefork_campaign_budgets");
       state.campaignBudgets = saved ? JSON.parse(saved) : {};
+      
+      for (const k in state.campaignBudgets) {
+        if (state.campaignBudgets[k] && typeof state.campaignBudgets[k] !== "object") {
+          state.campaignBudgets[k] = {
+            budget: parseFloat(state.campaignBudgets[k]) || 0,
+            monthly_budget: 0,
+            start_date: "",
+            end_date: ""
+          };
+        }
+      }
+      
       state.originalCampaignBudgets = JSON.parse(JSON.stringify(state.campaignBudgets));
     } catch (e) {
       state.campaignBudgets = {};
@@ -3359,19 +3711,58 @@ app.addEventListener("change", (event) => {
     return;
   }
 
-  if (event.target.matches(".pacing-budget-input")) {
+function getCampaignBudgetsObject(campaignName) {
+  if (!state.campaignBudgets[campaignName]) {
+    state.campaignBudgets[campaignName] = { budget: 0, monthly_budget: 0, start_date: "", end_date: "" };
+  } else if (typeof state.campaignBudgets[campaignName] !== "object") {
+    state.campaignBudgets[campaignName] = {
+      budget: parseFloat(state.campaignBudgets[campaignName]) || 0,
+      monthly_budget: 0,
+      start_date: "",
+      end_date: ""
+    };
+  }
+  return state.campaignBudgets[campaignName];
+}
+
+  if (event.target.matches(".pacing-budget-input, .pacing-monthly-budget-input")) {
     const campaignName = event.target.dataset.campaign;
     const rawVal = event.target.value;
     const cleanVal = rawVal.replace(/[^0-9.]/g, "");
     const budgetValue = parseFloat(cleanVal);
     
     if (!isNaN(budgetValue) && budgetValue >= 0) {
-      state.campaignBudgets[campaignName] = budgetValue;
+      const obj = getCampaignBudgetsObject(campaignName);
+      if (event.target.matches(".pacing-budget-input")) {
+        obj.budget = budgetValue;
+      } else {
+        obj.monthly_budget = budgetValue;
+      }
       localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
       render();
     } else {
       render();
     }
+    return;
+  }
+
+  if (event.target.matches(".pacing-start-date-input")) {
+    const campaignName = event.target.dataset.campaign;
+    const val = event.target.value || "";
+    const obj = getCampaignBudgetsObject(campaignName);
+    obj.start_date = val;
+    localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
+    render();
+    return;
+  }
+
+  if (event.target.matches(".pacing-end-date-input")) {
+    const campaignName = event.target.dataset.campaign;
+    const val = event.target.value || "";
+    const obj = getCampaignBudgetsObject(campaignName);
+    obj.end_date = val;
+    localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
+    render();
     return;
   }
 
@@ -3398,7 +3789,7 @@ app.addEventListener("change", (event) => {
 });
 
 app.addEventListener("keydown", (event) => {
-  if (event.target.matches(".pacing-budget-input") && event.key === "Enter") {
+  if (event.target.matches(".pacing-budget-input, .pacing-monthly-budget-input, .pacing-start-date-input, .pacing-end-date-input") && event.key === "Enter") {
     event.target.blur();
   }
 });
@@ -3437,7 +3828,7 @@ app.addEventListener("mousemove", (event) => {
     const dayLabel = hoveredDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     const metricType = timeline.dataset.metric;
     const hoverValue = metricType === "Cost"
-      ? `${pt.value.toFixed(2)} EUR`
+      ? formatLocalCurrency(pt.value, 2)
       : new Intl.NumberFormat("en").format(Math.round(pt.value));
 
     tooltip.textContent = `${dayLabel} · ${hoverValue}`;

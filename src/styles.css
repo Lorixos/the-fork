@@ -3108,36 +3108,53 @@ button:focus-visible {
 }
 
 /* Pacing Sticky Column Overrides */
+.performance-table.is-tab-pacing th:nth-child(1),
+.performance-table.is-tab-pacing td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: #ffffff;
+}
+
 .performance-table.is-tab-pacing th:nth-child(2),
 .performance-table.is-tab-pacing td:nth-child(2) {
-  width: 260px;
-  min-width: 260px;
-  max-width: 260px;
-  border-right: none;
-}
-
-.performance-table.is-tab-pacing th:nth-child(3),
-.performance-table.is-tab-pacing td:nth-child(3) {
   position: sticky;
-  left: 308px;
+  left: 48px;
   z-index: 10;
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  border-right: 1px solid rgba(3, 47, 40, 0.12);
-  will-change: transform;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  text-align: left;
+  border-right: 1px solid rgba(3, 47, 40, 0.12) !important;
+  background-color: #ffffff;
 }
 
-.performance-table.is-tab-pacing th:nth-child(3) {
-  z-index: 20;
+/* Disable sticky for column 3 and 4 in pacing view */
+.performance-table.is-tab-pacing th:nth-child(3),
+.performance-table.is-tab-pacing td:nth-child(3),
+.performance-table.is-tab-pacing th:nth-child(4),
+.performance-table.is-tab-pacing td:nth-child(4) {
+  position: static !important;
+  z-index: auto !important;
+  left: auto !important;
+  border-right: none !important;
+  background-color: transparent !important;
+  will-change: auto !important;
 }
 
-.performance-table.is-tab-pacing tfoot td:nth-child(3) {
-  position: sticky;
-  left: 308px;
-  bottom: 0;
+/* Opaque backgrounds for locked columns on odd/even rows */
+.performance-table.is-tab-pacing tbody tr:nth-child(odd) td:nth-child(1),
+.performance-table.is-tab-pacing tbody tr:nth-child(odd) td:nth-child(2) {
+  background-color: #ffffff !important;
+}
+.performance-table.is-tab-pacing tbody tr:nth-child(even) td:nth-child(1),
+.performance-table.is-tab-pacing tbody tr:nth-child(even) td:nth-child(2) {
+  background-color: #f7faf8 !important;
+}
+.performance-table.is-tab-pacing tfoot td:nth-child(1),
+.performance-table.is-tab-pacing tfoot td:nth-child(2) {
+  background-color: #f0f5f2 !important;
   z-index: 20;
-  will-change: transform;
 }
 
 /* Pacing Budget Input Styles */
@@ -3149,7 +3166,8 @@ button:focus-visible {
   width: 100%;
 }
 
-.pacing-budget-input {
+.pacing-budget-input,
+.pacing-monthly-budget-input {
   width: 100%;
   max-width: 110px;
   height: 36px;
@@ -3166,17 +3184,156 @@ button:focus-visible {
   transition: all 0.2s ease;
 }
 
-.pacing-budget-input:hover {
+.pacing-budget-input:hover,
+.pacing-monthly-budget-input:hover {
   border-color: rgba(3, 47, 40, 0.2);
   background-color: rgba(255, 255, 255, 0.9);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.pacing-budget-input:focus {
+.pacing-budget-input:focus,
+.pacing-monthly-budget-input:focus {
   outline: none;
   border-color: #028a4f;
   background-color: #ffffff;
   box-shadow: 0 0 0 2.5px rgba(2, 138, 79, 0.15), inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* Pacing Header and Group Styles */
+.pacing-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pacing-header-row .pacing-meta-card {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 400px;
+}
+
+.performance-table th.pacing-group-header {
+  text-align: center;
+  font-weight: 880;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 1px;
+  border-bottom: 2px solid rgba(2, 138, 79, 0.15) !important;
+  background: rgba(2, 138, 79, 0.03);
+}
+
+.pacing-obj-badge {
+  display: inline-block;
+  background: rgba(3, 47, 40, 0.05);
+  color: rgba(20, 32, 28, 0.65);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  text-transform: uppercase;
+}
+
+.pacing-dates-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.date-input-group label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(20, 32, 28, 0.45);
+  text-transform: uppercase;
+  min-width: 32px;
+  text-align: left;
+}
+
+.pacing-start-date-input,
+.pacing-end-date-input {
+  border: 1px solid rgba(3, 47, 40, 0.08);
+  background: rgba(255, 255, 255, 0.6);
+  color: #101815;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  width: 115px;
+  transition: all 0.2s ease;
+}
+
+.pacing-start-date-input:hover,
+.pacing-end-date-input:hover {
+  border-color: rgba(3, 47, 40, 0.2);
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.pacing-start-date-input:focus,
+.pacing-end-date-input:focus {
+  outline: none;
+  border-color: #028a4f;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(2, 138, 79, 0.1);
+}
+
+.pacing-save-btn {
+  background: linear-gradient(135deg, #028a4f, #00c853);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 0.92rem;
+  font-weight: 780;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(2, 138, 79, 0.25);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+}
+
+.pacing-save-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(2, 138, 79, 0.35);
+}
+
+.pacing-save-btn:active {
+  transform: translateY(0);
+}
+
+.pacing-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.pacing-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #ffffff;
+  border-radius: 50%;
+  animation: pacing-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes pacing-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Donut Chart styles */

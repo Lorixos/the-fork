@@ -326,7 +326,7 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
         try:
             client = bigquery.Client(project=PROJECT_ID)
             sql_query = f"""
-            SELECT campaign_name, budget
+            SELECT campaign_name, budget, monthly_budget, start_date, end_date
             FROM `{BUDGETS_TABLE_NAME}`
             WHERE platform = @platform
             """
@@ -338,7 +338,15 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
             query_job = client.query(sql_query, job_config=job_config)
             results = list(query_job.result())
             
-            budgets = {row.campaign_name: row.budget for row in results}
+            budgets = {
+                row.campaign_name: {
+                    "budget": row.budget if row.budget is not None else 0.0,
+                    "monthly_budget": row.monthly_budget if row.monthly_budget is not None else 0.0,
+                    "start_date": row.start_date if row.start_date is not None else "",
+                    "end_date": row.end_date if row.end_date is not None else ""
+                }
+                for row in results
+            }
             self.send_json_response(200, budgets)
         except Exception as e:
             sys.stderr.write(f"Error querying budgets from BigQuery: {str(e)}\n")
@@ -359,17 +367,32 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
                 return
                 
             client = bigquery.Client(project=PROJECT_ID)
-            updates = [{"campaign_name": name, "budget": float(val)} for name, val in budgets.items()]
+            updates = [
+                {
+                    "campaign_name": name,
+                    "budget": float(val.get("budget", 0.0)) if isinstance(val, dict) else float(val),
+                    "monthly_budget": float(val.get("monthly_budget", 0.0)) if isinstance(val, dict) else 0.0,
+                    "start_date": val.get("start_date", "") if isinstance(val, dict) else "",
+                    "end_date": val.get("end_date", "") if isinstance(val, dict) else ""
+                }
+                for name, val in budgets.items()
+            ]
             
             sql_query = f"""
             MERGE `{BUDGETS_TABLE_NAME}` T
             USING UNNEST(@updates) S
             ON T.campaign_name = S.campaign_name AND T.platform = @platform
             WHEN MATCHED THEN
-              UPDATE SET budget = S.budget, updated_at = CURRENT_TIMESTAMP(), updated_by = @updated_by
+              UPDATE SET 
+                budget = S.budget, 
+                monthly_budget = S.monthly_budget,
+                start_date = S.start_date,
+                end_date = S.end_date,
+                updated_at = CURRENT_TIMESTAMP(), 
+                updated_by = @updated_by
             WHEN NOT MATCHED THEN
-              INSERT (campaign_name, platform, budget, updated_at, updated_by)
-              VALUES (S.campaign_name, @platform, S.budget, CURRENT_TIMESTAMP(), @updated_by)
+              INSERT (campaign_name, platform, budget, monthly_budget, start_date, end_date, updated_at, updated_by)
+              VALUES (S.campaign_name, @platform, S.budget, S.monthly_budget, S.start_date, S.end_date, CURRENT_TIMESTAMP(), @updated_by)
             """
             
             job_config = bigquery.QueryJobConfig(
@@ -381,7 +404,10 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
                             bigquery.StructQueryParameter(
                                 "",
                                 bigquery.ScalarQueryParameter("campaign_name", "STRING", u["campaign_name"]),
-                                bigquery.ScalarQueryParameter("budget", "FLOAT", u["budget"])
+                                bigquery.ScalarQueryParameter("budget", "FLOAT", u["budget"]),
+                                bigquery.ScalarQueryParameter("monthly_budget", "FLOAT", u["monthly_budget"]),
+                                bigquery.ScalarQueryParameter("start_date", "STRING", u["start_date"]),
+                                bigquery.ScalarQueryParameter("end_date", "STRING", u["end_date"])
                             )
                             for u in updates
                         ]
@@ -484,6 +510,15 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
                 if max_day and w_end > max_day:
                     date_end_val = max_day
 
+                cost_timeline = [0.0] * 7
+                impressions_timeline = [0.0] * 7
+                for r in daily_rows:
+                    r_day = coerce_day(r.day)
+                    day_idx = (r_day - w_start).days
+                    if 0 <= day_idx < 7:
+                        cost_timeline[day_idx] += float(r.costs or 0.0)
+                        impressions_timeline[day_idx] += float(r.impressions or 0)
+
                 weekly_data[key] = {
                     "date_start": week_start_str,
                     "date_end": str(date_end_val),
@@ -506,7 +541,9 @@ class DashboardServerHandler(http.server.SimpleHTTPRequestHandler):
                     "video_views": video_views,
                     "video_completions": video_completions,
                     "cta_installs": cta_installs,
-                    "cta_bookings": cta_bookings
+                    "cta_bookings": cta_bookings,
+                    "cost_timeline": cost_timeline,
+                    "impressions_timeline": impressions_timeline
                 }
                 
             final_rows = []

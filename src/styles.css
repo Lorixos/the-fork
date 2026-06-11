@@ -4972,25 +4972,19 @@ button:focus-visible {
 /* Scorecard Number Entry/Change Pop Animation */
 .metric-card strong.animate-number {
   display: inline-block;
-  transform-origin: left center;
-  animation: numberUpdatePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: numberUpdatePop 0.28s ease-out both;
   animation-delay: var(--delay, 0ms);
   will-change: transform, opacity;
 }
 
 @keyframes numberUpdatePop {
-  0% {
-    opacity: 0.3;
-    transform: translateY(6px) scale(0.96);
-    filter: blur(1px);
+  from {
+    opacity: 0;
+    transform: translateY(3px);
   }
-  70% {
-    transform: translateY(-1px) scale(1.03);
-    filter: blur(0px);
-  }
-  100% {
+  to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 

@@ -38,6 +38,18 @@ const state = {
   budgetsSaving: false,
   sparklinesAnimated: false,
   tabSwitched: true,
+  lastMarketLeft: null,
+  lastMarketWidth: null,
+  lastMarketHeight: null,
+  lastMarketTop: null,
+  lastPacingLeft: null,
+  lastPacingWidth: null,
+  lastPacingHeight: null,
+  lastPacingTop: null,
+  lastTabLeft: null,
+  lastTabWidth: null,
+  lastTabHeight: null,
+  lastTabTop: null,
   activePacingCampaign: null,
   activePacingDateField: null,
   miniCalYear: 2026,
@@ -836,9 +848,13 @@ function renderMarketRail() {
     })
     .join("");
 
+  const indicatorStyle = state.lastMarketWidth !== undefined && state.lastMarketWidth !== null
+    ? `style="width: ${state.lastMarketWidth}px; height: ${state.lastMarketHeight}px; transform: translate3d(${state.lastMarketLeft}px, ${state.lastMarketTop}px, 0); opacity: 1;"`
+    : `style="opacity: 0;"`;
+
   return `
     <nav class="market-strip-compact" aria-label="Market selector">
-      <div class="market-active-indicator" style="opacity: 0;"></div>
+      <div class="market-active-indicator" ${indicatorStyle}></div>
       ${allButton}
       ${flags}
     </nav>
@@ -2818,6 +2834,10 @@ function renderPacingDatePickerPopup(row) {
 }
 
 function renderPacingView(animateClass = "") {
+  const indicatorStyle = state.lastPacingWidth !== undefined && state.lastPacingWidth !== null
+    ? `style="width: ${state.lastPacingWidth}px; height: ${state.lastPacingHeight}px; transform: translate3d(${state.lastPacingLeft}px, ${state.lastPacingTop}px, 0); opacity: 1;"`
+    : `style="opacity: 0;"`;
+
   let maxDateStr = "2026-01-01";
   state.data.rows.forEach(r => {
     if (r.dateEnd && r.dateEnd > maxDateStr) {
@@ -3292,7 +3312,7 @@ function renderPacingView(animateClass = "") {
           <div class="pacing-meta-controls">
             <div class="pacing-view-toggle-wrap">
               <div class="pacing-view-toggle">
-                <div class="pacing-active-indicator" style="opacity: 0;"></div>
+                <div class="pacing-active-indicator" ${indicatorStyle}></div>
                 ${btnMonthlyHtml}
                 ${btnLifetimeHtml}
               </div>
@@ -3319,6 +3339,10 @@ function renderPacingView(animateClass = "") {
 }
 
 function renderPerformanceTable() {
+  const tabIndicatorStyle = state.lastTabWidth !== undefined && state.lastTabWidth !== null
+    ? `style="width: ${state.lastTabWidth}px; height: ${state.lastTabHeight}px; transform: translate3d(${state.lastTabLeft}px, ${state.lastTabTop}px, 0); opacity: 1;"`
+    : `style="opacity: 0;"`;
+
   const rows = performanceRows();
   const total = aggregateRows(rows.flatMap((row) => row.rows));
   total.isTotal = true;
@@ -3378,7 +3402,7 @@ function renderPerformanceTable() {
             <h2>${activeTab.label} ${state.tableTab === "charts" || state.tableTab === "pacing" ? "" : "Performance"}</h2>
           </div>
           <div class="table-tabs" role="tablist" aria-label="Performance table views">
-            <div class="tabs-active-indicator" style="opacity: 0;"></div>
+            <div class="tabs-active-indicator" ${tabIndicatorStyle}></div>
             ${tableTabs
               .map((tab) => `
                 <button class="${tab.id === state.tableTab ? "is-active" : ""}" type="button" role="tab" data-action="table-tab" data-tab="${tab.id}" aria-selected="${tab.id === state.tableTab}">
@@ -3467,6 +3491,7 @@ function render() {
       } catch (e) {}
     }
 
+    captureActiveButtonPositions();
     app.className = "dashboard-shell";
     app.innerHTML = `${renderHeader()}${renderScorecard()}${renderPerformanceTable()}`;
     postRender();
@@ -3555,6 +3580,44 @@ function updateActiveIndicators() {
         indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
         indicator.style.opacity = "1";
       });
+    }
+  }
+}
+
+function captureActiveButtonPositions() {
+  // 1. Market strip
+  const marketStrip = document.querySelector(".market-strip-compact");
+  if (marketStrip) {
+    const activeBtn = marketStrip.querySelector(".flag-button.is-active");
+    if (activeBtn) {
+      state.lastMarketLeft = activeBtn.offsetLeft;
+      state.lastMarketWidth = activeBtn.offsetWidth;
+      state.lastMarketHeight = activeBtn.offsetHeight;
+      state.lastMarketTop = activeBtn.offsetTop;
+    }
+  }
+
+  // 2. Pacing toggle
+  const pacingToggle = document.querySelector(".pacing-view-toggle");
+  if (pacingToggle) {
+    const activeBtn = pacingToggle.querySelector(".pacing-toggle-btn.is-active");
+    if (activeBtn) {
+      state.lastPacingLeft = activeBtn.offsetLeft;
+      state.lastPacingWidth = activeBtn.offsetWidth;
+      state.lastPacingHeight = activeBtn.offsetHeight;
+      state.lastPacingTop = activeBtn.offsetTop;
+    }
+  }
+
+  // 3. Table tabs
+  const tableTabsWrap = document.querySelector(".table-tabs");
+  if (tableTabsWrap) {
+    const activeBtn = tableTabsWrap.querySelector("button.is-active");
+    if (activeBtn) {
+      state.lastTabLeft = activeBtn.offsetLeft;
+      state.lastTabWidth = activeBtn.offsetWidth;
+      state.lastTabHeight = activeBtn.offsetHeight;
+      state.lastTabTop = activeBtn.offsetTop;
     }
   }
 }

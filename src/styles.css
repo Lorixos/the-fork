@@ -363,7 +363,7 @@ button:focus-visible {
 /* Sliding active indicator for markets */
 .market-active-indicator {
   position: absolute;
-  top: 5px;
+  top: 0;
   left: 0;
   background: #ffffff;
   border-radius: 12px;
@@ -1791,7 +1791,7 @@ button:focus-visible {
 /* Sliding active indicator for table views */
 .tabs-active-indicator {
   position: absolute;
-  top: 6px;
+  top: 0;
   left: 0;
   background: #ffffff;
   border-radius: 12px;
@@ -3007,7 +3007,7 @@ button:focus-visible {
 /* Sliding active indicator for pacing */
 .pacing-active-indicator {
   position: absolute;
-  top: 4px;
+  top: 0;
   left: 0;
   background: #ffffff;
   border-radius: 10px;

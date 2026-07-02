@@ -272,10 +272,7 @@ function isValidDomain(email) {
   const parts = lowercaseEmail.split('@');
   if (parts.length !== 2) return false;
   const domain = parts[1];
-  return domain.startsWith('deptagency.') || 
-         domain.startsWith('thefork.') || 
-         domain === 'dept.agency' || 
-         domain.startsWith('dept.agency.');
+  return domain.startsWith('deptagency.') || domain.startsWith('thefork.');
 }
 
 function toNumber(value) {
@@ -674,7 +671,7 @@ function renderLoginScreen() {
   ` : `
     <div class="auth-info-note">
       <span class="auth-info-icon-wrap"><img src="${iconUrl("shield-check")}" alt="Secure" class="auth-info-icon" /></span>
-      <span>Authorized corporate domains only: <strong>@deptagency.*</strong>, <strong>@dept.agency</strong> & <strong>@thefork.*</strong></span>
+      <span>Authorized corporate domains only: <strong>@deptagency.*</strong> & <strong>@thefork.*</strong></span>
     </div>
   `;
 
@@ -791,7 +788,7 @@ function handleGoogleLogin() {
         } else {
           state.currentUser = null;
           state.data.rows = [];
-          state.authError = `Access Denied: The account ${user.email} is not authorized. Only corporate domains (@deptagency.*, @dept.agency and @thefork.*) can access this dashboard.`;
+          state.authError = `Access Denied: The account ${user.email} is not authorized. Only corporate domains (@deptagency.* and @thefork.*) can access this dashboard.`;
           firebase.auth().signOut().then(() => {
             render();
           });
@@ -4537,7 +4534,7 @@ if (typeof firebase !== "undefined") {
           } else {
             state.currentUser = null;
             state.data.rows = [];
-            state.authError = `Access Denied: The email domain of ${user.email} is not authorized. Please use a @deptagency.*, @dept.agency or @thefork.* account.`;
+            state.authError = `Access Denied: The email domain of ${user.email} is not authorized. Please use a @deptagency.* or @thefork.* account.`;
             firebase.auth().signOut().then(() => {
               render();
             });

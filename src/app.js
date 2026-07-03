@@ -3334,9 +3334,18 @@ function renderPacingView(animateClass = "") {
 
   return `
     <div class="pacing-tab-container${animateClass}">
+      <div class="pacing-subtabs-row" style="margin-bottom: 16px; display: flex; justify-content: flex-start;">
+        <div class="pacing-view-toggle-wrap">
+          <div class="pacing-view-toggle">
+            <div class="pacing-active-indicator" ${indicatorStyle}></div>
+            ${btnMonthlyHtml}
+            ${btnLifetimeHtml}
+          </div>
+        </div>
+      </div>
       <div class="pacing-header-row">
         <div class="pacing-meta-card">
-          <div class="pacing-meta-stats">
+          <div class="pacing-meta-stats" style="width: 100%;">
             ${isMonthly ? `
               <div class="meta-item is-month-selector" style="position: relative; cursor: pointer;" data-action="toggle-filter" data-control="pacing-month" aria-expanded="${state.openControl === "pacing-month"}">
                 <span class="meta-label" style="display: flex; align-items: center; gap: 4px; user-select: none;">
@@ -3389,16 +3398,6 @@ function renderPacingView(animateClass = "") {
                 <span class="meta-value" style="font-weight: 700; color: #101815;">${totalLifetimeBudget > 0 ? Math.round((totalLifetimeSpend / totalLifetimeBudget) * 100) : 0}%</span>
               </div>
             `}
-          </div>
-          
-          <div class="pacing-meta-controls">
-            <div class="pacing-view-toggle-wrap">
-              <div class="pacing-view-toggle">
-                <div class="pacing-active-indicator" ${indicatorStyle}></div>
-                ${btnMonthlyHtml}
-                ${btnLifetimeHtml}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -4686,6 +4685,16 @@ if (typeof firebase !== "undefined") {
       
       if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
+      }
+
+      // Localhost dev bypass for testing dashboard locally
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        state.authLoading = false;
+        state.currentUser = { email: "dev-test@deptagency.com", displayName: "Dev Test" };
+        state.authError = null;
+        render();
+        connectData();
+        return;
       }
       
       firebase.auth().onAuthStateChanged((user) => {

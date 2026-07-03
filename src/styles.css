@@ -3180,8 +3180,20 @@ button:focus-visible {
 .pacing-meta-stats {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
   gap: clamp(12px, 1.8vw, 24px);
   flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .pacing-meta-stats {
+    justify-content: center;
+    gap: 16px 24px;
+  }
+  .pacing-meta-stats .meta-divider {
+    display: none;
+  }
 }
 
 .pacing-meta-controls {

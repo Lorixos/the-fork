@@ -4988,3 +4988,33 @@ button:focus-visible {
   }
 }
 
+/* Pacing Month Selector styles */
+.meta-item.is-month-selector {
+  transition: all 0.2s ease;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.meta-item.is-month-selector:hover {
+  background: rgba(2, 138, 79, 0.05);
+  border-color: rgba(2, 138, 79, 0.15);
+}
+
+.meta-item.is-month-selector:hover .meta-value {
+  color: #028a4f !important;
+}
+
+.meta-item.is-month-selector:hover .chevron {
+  opacity: 1;
+}
+
+.meta-item.is-month-selector .chevron {
+  opacity: 0.6;
+}
+
+.pacing-month-menu {
+  box-shadow: 0 16px 36px rgba(3, 47, 40, 0.18) !important;
+}
+
+

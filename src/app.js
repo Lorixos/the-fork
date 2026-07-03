@@ -23,6 +23,7 @@ const state = {
   commentaryAuthor: "Dept team",
   commentaryEditMode: false,
   pacingTab: "monthly",
+  pacingMonth: null,
   currentUser: null,
   authError: null,
   authLoading: false,
@@ -2835,6 +2836,43 @@ function renderPacingDatePickerPopup(row) {
   `;
 }
 
+function getAvailablePacingMonths() {
+  const monthsSet = new Set();
+  state.data.rows.forEach(r => {
+    if (r.dateStart) monthsSet.add(r.dateStart.substring(0, 7));
+    if (r.dateEnd) monthsSet.add(r.dateEnd.substring(0, 7));
+  });
+  if (monthsSet.size === 0) {
+    return ["2026-07", "2026-06", "2026-05", "2026-04"];
+  }
+  return Array.from(monthsSet).sort().reverse();
+}
+
+function renderPacingMonthMenu(availableMonths, currentMonthStr) {
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  
+  const optionsHtml = availableMonths.map(ym => {
+    const parts = ym.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const label = `${months[m - 1]} ${y}`;
+    const isSelected = ym === currentMonthStr;
+    
+    return `
+      <button class="filter-option${isSelected ? " is-selected" : ""}" type="button" data-action="select-pacing-month" data-value="${ym}" role="option" aria-selected="${isSelected}">
+        <span>${label}</span>
+        ${isSelected ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="check-icon" style="margin-left: auto; width: 12px; height: 12px; color: #028a4f;"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ""}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="filter-menu pacing-month-menu" role="listbox" style="position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 1000; width: max-content; min-width: 150px; padding: 6px;">
+      ${optionsHtml}
+    </div>
+  `;
+}
+
 function renderPacingView(animateClass = "") {
   const indicatorStyle = state.lastPacingWidth !== undefined && state.lastPacingWidth !== null
     ? `style="width: ${state.lastPacingWidth}px; height: ${state.lastPacingHeight}px; transform: translate3d(${state.lastPacingLeft}px, ${state.lastPacingTop}px, 0); opacity: 1;"`
@@ -2847,7 +2885,11 @@ function renderPacingView(animateClass = "") {
     }
   });
 
-  const yearMonth = state.dateStart ? state.dateStart.substring(0, 7) : maxDateStr.substring(0, 7);
+  const availableMonths = getAvailablePacingMonths();
+  if (!state.pacingMonth && availableMonths.length > 0) {
+    state.pacingMonth = availableMonths[0];
+  }
+  const yearMonth = state.pacingMonth || maxDateStr.substring(0, 7);
   
   const ymParts = yearMonth.split('-');
   const yMonth = parseInt(ymParts[0], 10);
@@ -3290,9 +3332,15 @@ function renderPacingView(animateClass = "") {
       <div class="pacing-header-row">
         <div class="pacing-meta-card">
           <div class="pacing-meta-stats">
-            <div class="meta-item">
-              <span class="meta-label">Selected Month</span>
-              <span class="meta-value">${monthName}</span>
+            <div class="meta-item is-month-selector" style="position: relative; cursor: pointer;" data-action="toggle-filter" data-control="pacing-month" aria-expanded="${state.openControl === "pacing-month"}">
+              <span class="meta-label" style="display: flex; align-items: center; gap: 4px; user-select: none;">
+                Selected Month
+                <img class="chevron" src="${iconUrl("chevron-down")}" alt="" style="width: 10px; height: 10px; transition: transform 0.2s; ${state.openControl === "pacing-month" ? "transform: rotate(180deg);" : ""}" />
+              </span>
+              <span class="meta-value" style="display: flex; align-items: center; gap: 4px; font-weight: 700; color: #101815;">
+                ${monthName}
+              </span>
+              ${state.openControl === "pacing-month" ? renderPacingMonthMenu(availableMonths, yearMonth) : ""}
             </div>
             <div class="meta-divider"></div>
             <div class="meta-item">
@@ -3649,8 +3697,8 @@ function syncFilterOptionsFromData() {
       !state.dateEnd || state.dateEnd > bounds.max || state.dateEnd < bounds.min ||
       state.dateStart > state.dateEnd) {
     const presets = getCalendarPresets(bounds);
-    state.dateStart = presets.lastWeek.start;
-    state.dateEnd = presets.lastWeek.end;
+    state.dateStart = presets.mtd.start;
+    state.dateEnd = presets.mtd.end;
   }
   updateDateRangeLabel();
 
@@ -3670,8 +3718,8 @@ function initDefaultDateRange() {
   if (state.dateStart && state.dateEnd && state.dateStart >= bounds.min && state.dateEnd <= bounds.max) {
     // Keep existing valid selection
   } else {
-    state.dateStart = presets.lastWeek.start;
-    state.dateEnd = presets.lastWeek.end;
+    state.dateStart = presets.mtd.start;
+    state.dateEnd = presets.mtd.end;
   }
   updateDateRangeLabel();
 }
@@ -4182,6 +4230,13 @@ app.addEventListener("click", (event) => {
   if (control.dataset.action === "pacing-tab") {
     state.pacingTab = control.dataset.tab;
     state.tabSwitched = true;
+    render();
+    return;
+  }
+
+  if (control.dataset.action === "select-pacing-month") {
+    state.pacingMonth = control.dataset.value;
+    state.openControl = null;
     render();
     return;
   }

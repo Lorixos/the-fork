@@ -2875,6 +2875,7 @@ function renderPacingMonthMenu(availableMonths, currentMonthStr) {
 }
 
 function renderPacingView(animateClass = "") {
+  const isMonthly = state.pacingTab !== "lifetime";
   const indicatorStyle = state.lastPacingWidth !== undefined && state.lastPacingWidth !== null
     ? `style="width: ${state.lastPacingWidth}px; height: ${state.lastPacingHeight}px; transform: translate3d(${state.lastPacingLeft}px, ${state.lastPacingTop}px, 0); opacity: 1;"`
     : `style="opacity: 0;"`;
@@ -3058,7 +3059,6 @@ function renderPacingView(animateClass = "") {
   const monthName = new Date(yMonth, mMonth - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   // Render Table Rows based on selected sub-tab
-  const isMonthly = state.pacingTab !== "lifetime";
   
   const rowsHtml = campaignPacingRows.map((r, i) => {
     if (isMonthly) {

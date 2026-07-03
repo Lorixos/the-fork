@@ -4006,10 +4006,24 @@ async function loadLivePerformance() {
     if (response.ok) {
       const liveRows = await response.json();
       if (Array.isArray(liveRows) && liveRows.length > 0) {
+        const cachedMax = dateBoundsForMarket().max;
+        const cachedPacingMonth = state.pacingMonth;
+
         state.data.rows = liveRows.map(normalizeRow);
         state.data.source = "official-live";
         state.data.message = "Connected to BigQuery Live";
         state.data.updatedAt = new Date().toISOString();
+
+        const liveBounds = dateBoundsForMarket();
+        if (liveBounds.max > cachedMax) {
+          state.dateStart = null;
+          state.dateEnd = null;
+        }
+
+        const liveMonths = getAvailablePacingMonths();
+        if (liveMonths.length > 0 && (!cachedPacingMonth || liveMonths[0] > cachedPacingMonth)) {
+          state.pacingMonth = liveMonths[0];
+        }
 
         initDefaultDateRange();
         syncFilterOptionsFromData();

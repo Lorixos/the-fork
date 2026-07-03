@@ -3353,6 +3353,8 @@ button:focus-visible {
   margin-bottom: 24px;
   gap: 16px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 25;
 }
 
 .pacing-header-row .pacing-meta-card {
@@ -5016,5 +5018,12 @@ button:focus-visible {
 .pacing-month-menu {
   box-shadow: 0 16px 36px rgba(3, 47, 40, 0.18) !important;
 }
+
+/* Elevate stacking context of cells with open date picker popovers */
+.performance-table td:has(.pacing-calendar-popover) {
+  position: relative;
+  z-index: 40 !important;
+}
+
 
 

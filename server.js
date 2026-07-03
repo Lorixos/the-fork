@@ -355,9 +355,29 @@ app.post('/api/budgets', async (req, res) => {
   }
 });
 
+const performanceCache = {
+  meta: {
+    data: null,
+    timestamp: 0
+  },
+  tiktok: {
+    data: null,
+    timestamp: 0
+  }
+};
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
 // 6. GET /api/performance
 app.get('/api/performance', async (req, res) => {
   const { platform = 'meta' } = req.query;
+  const key = platform === 'tiktok' ? 'tiktok' : 'meta';
+  
+  const now = Date.now();
+  if (performanceCache[key].data && (now - performanceCache[key].timestamp < CACHE_TTL)) {
+    console.log(`Serving cached performance data for ${key}`);
+    return res.status(200).json(performanceCache[key].data);
+  }
+
   const isTiktok = (platform === 'tiktok');
   const tableName = isTiktok ? "thefork_tiktok_ads_modeled" : "the_fork_fb_ads_modeled";
 
@@ -539,6 +559,9 @@ app.get('/api/performance', async (req, res) => {
       }
       return a.campaign.localeCompare(b.campaign); // ascending campaign
     });
+
+    performanceCache[key].data = finalRows;
+    performanceCache[key].timestamp = now;
 
     return res.status(200).json(finalRows);
   } catch (error) {

@@ -12,6 +12,7 @@ const state = {
   target: "ALL",
   campaign: "ALL",
   exported: false,
+  initialLoading: true,
   tableTab: "weekly",
   openControl: null,
   commentaryText: "",
@@ -3505,6 +3506,34 @@ function renderScorecard() {
   `;
 }
 
+function renderDashboardSkeleton() {
+  return `
+    <header class="topbar is-loading-pulse" style="margin-bottom: 24px; pointer-events: none;">
+      <section class="header-panel" style="border-radius: 20px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="width: 140px; height: 32px; background: rgba(255,255,255,0.08); border-radius: 8px;"></div>
+        <div style="width: 260px; height: 20px; background: rgba(255,255,255,0.06); border-radius: 4px;"></div>
+      </section>
+    </header>
+    <div class="scorecard is-loading-pulse" style="height: 340px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px; margin-bottom: 24px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; pointer-events: none;">
+      <div style="width: 200px; height: 24px; background: rgba(255,255,255,0.06); border-radius: 6px;"></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; flex: 1;">
+        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
+        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
+        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
+        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
+      </div>
+    </div>
+    <div class="performance-panel is-loading-pulse" style="height: 400px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 28px; padding: 28px; box-sizing: border-box; pointer-events: none;">
+      <div style="width: 150px; height: 20px; background: rgba(255,255,255,0.06); border-radius: 6px; margin-bottom: 20px;"></div>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="height: 48px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px;"></div>
+        <div style="height: 48px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px;"></div>
+        <div style="height: 48px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px;"></div>
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   if (state.authLoading && !state.currentUser) {
     app.className = "login-shell";
@@ -3515,6 +3544,9 @@ function render() {
   if (!state.currentUser) {
     app.className = "login-shell";
     app.innerHTML = renderLoginScreen();
+  } else if (state.initialLoading) {
+    app.className = "dashboard-shell loading-shell";
+    app.innerHTML = renderDashboardSkeleton();
   } else {
     // Save scroll positions
     const scrollContainers = document.querySelectorAll(".table-scroll");
@@ -3958,8 +3990,40 @@ async function saveBudgets() {
   }
 }
 
+let liveLoaderPromise = null;
+
 async function connectData() {
   await loadBudgets();
+  state.initialLoading = true;
+  render();
+
+  let liveLoaded = false;
+  let timeoutTriggered = false;
+
+  // Start the background live loader immediately
+  liveLoaderPromise = loadLivePerformance().then((success) => {
+    liveLoaded = true;
+    if (success) {
+      state.initialLoading = false;
+      render();
+    } else {
+      fallbackToStaticCache();
+    }
+  });
+
+  // Race: if live load doesn't finish in 1.2 seconds, fallback to static cache
+  setTimeout(() => {
+    timeoutTriggered = true;
+    if (!liveLoaded) {
+      console.log("Live BigQuery load is taking longer than 1.2s. Falling back to cached data...");
+      fallbackToStaticCache();
+    }
+  }, 1200);
+}
+
+async function fallbackToStaticCache() {
+  if (state.data.source !== "loading" && state.data.source !== "loading-live") return; // already loaded or bypassed
+  
   let loadedFromCache = false;
   try {
     const officialRows = await loadOfficialRows();
@@ -3987,9 +4051,9 @@ async function connectData() {
     await loadCommentary();
     await loadSavedWeeks();
   }
-
-  // Load live data from BigQuery in the background
-  loadLivePerformance();
+  
+  state.initialLoading = false;
+  render();
 }
 
 async function loadLivePerformance() {
@@ -4031,7 +4095,7 @@ async function loadLivePerformance() {
         await loadSavedWeeks();
         render();
         console.log("Successfully loaded live data from BigQuery backend API.");
-        return;
+        return true;
       }
     }
   } catch (err) {
@@ -4043,6 +4107,7 @@ async function loadLivePerformance() {
     state.data.message = `Connected to ${officialTableName} (Cache)`;
     render();
   }
+  return false;
 }
 
 document.addEventListener("click", (event) => {

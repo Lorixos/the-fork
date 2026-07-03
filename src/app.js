@@ -2982,7 +2982,11 @@ function renderPacingView(animateClass = "") {
     const budgetObj = state.campaignBudgets[name] || {};
     const hasConfig = state.campaignBudgets[name] !== undefined;
 
-    if (cData.monthlySpend > 0 || hasConfig) {
+    const isKeep = isMonthly 
+      ? (cData.monthlySpend > 0 || hasConfig)
+      : (cData.totalSpend > 0 || hasConfig);
+
+    if (isKeep) {
       activeCampaigns.push({
         ...cData,
         budgetObj
@@ -3333,31 +3337,58 @@ function renderPacingView(animateClass = "") {
       <div class="pacing-header-row">
         <div class="pacing-meta-card">
           <div class="pacing-meta-stats">
-            <div class="meta-item is-month-selector" style="position: relative; cursor: pointer;" data-action="toggle-filter" data-control="pacing-month" aria-expanded="${state.openControl === "pacing-month"}">
-              <span class="meta-label" style="display: flex; align-items: center; gap: 4px; user-select: none;">
-                Selected Month
-                <img class="chevron" src="${iconUrl("chevron-down")}" alt="" style="width: 10px; height: 10px; transition: transform 0.2s; ${state.openControl === "pacing-month" ? "transform: rotate(180deg);" : ""}" />
-              </span>
-              <span class="meta-value" style="display: flex; align-items: center; gap: 4px; font-weight: 700; color: #101815;">
-                ${monthName}
-              </span>
-              ${state.openControl === "pacing-month" ? renderPacingMonthMenu(availableMonths, yearMonth) : ""}
-            </div>
-            <div class="meta-divider"></div>
-            <div class="meta-item">
-              <span class="meta-label">Month Elapsed</span>
-              <span class="meta-value">${Math.round(monthlyElapsedPct)}%</span>
-            </div>
-            <div class="meta-divider"></div>
-            <div class="meta-item">
-              <span class="meta-label">Active Campaigns</span>
-              <span class="meta-value">${campaignPacingRows.length}</span>
-            </div>
-            <div class="meta-divider"></div>
-            <div class="meta-item">
-              <span class="meta-label">Yesterday's Total Spend</span>
-              <span class="meta-value" style="color: #028a4f;">${formatCurrency(totalYesterdaySpend)}</span>
-            </div>
+            ${isMonthly ? `
+              <div class="meta-item is-month-selector" style="position: relative; cursor: pointer;" data-action="toggle-filter" data-control="pacing-month" aria-expanded="${state.openControl === "pacing-month"}">
+                <span class="meta-label" style="display: flex; align-items: center; gap: 4px; user-select: none;">
+                  Selected Month
+                  <img class="chevron" src="${iconUrl("chevron-down")}" alt="" style="width: 10px; height: 10px; transition: transform 0.2s; ${state.openControl === "pacing-month" ? "transform: rotate(180deg);" : ""}" />
+                </span>
+                <span class="meta-value" style="display: flex; align-items: center; gap: 4px; font-weight: 700; color: #101815;">
+                  ${monthName}
+                </span>
+                ${state.openControl === "pacing-month" ? renderPacingMonthMenu(availableMonths, yearMonth) : ""}
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Month Elapsed</span>
+                <span class="meta-value">${Math.round(monthlyElapsedPct)}%</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Active Campaigns</span>
+                <span class="meta-value">${campaignPacingRows.length}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Yesterday's Total Spend</span>
+                <span class="meta-value" style="color: #028a4f; font-weight: 700;">${formatCurrency(totalYesterdaySpend)}</span>
+              </div>
+            ` : `
+              <div class="meta-item">
+                <span class="meta-label">Total Campaigns</span>
+                <span class="meta-value" style="font-weight: 700; color: #101815;">${campaignPacingRows.length}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Yesterday's Total Spend</span>
+                <span class="meta-value" style="color: #028a4f; font-weight: 700;">${formatCurrency(totalYesterdaySpend)}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Total Lifetime Budget</span>
+                <span class="meta-value" style="font-weight: 700; color: #101815;">${formatCurrency(totalLifetimeBudget)}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Total Lifetime Spend</span>
+                <span class="meta-value" style="color: #028a4f; font-weight: 700;">${formatCurrency(totalLifetimeSpend)}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Overall Spent %</span>
+                <span class="meta-value" style="font-weight: 700; color: #101815;">${totalLifetimeBudget > 0 ? Math.round((totalLifetimeSpend / totalLifetimeBudget) * 100) : 0}%</span>
+              </div>
+            `}
           </div>
           
           <div class="pacing-meta-controls">

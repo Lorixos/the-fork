@@ -50,13 +50,16 @@
 }
 
 html {
-  background: #eef6f1;
+  background: #011611;
 }
 
 body {
   margin: 0;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button {
@@ -113,7 +116,12 @@ button:focus-visible {
   border: 1px solid var(--line);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.7));
   box-shadow: var(--shadow);
-  backdrop-filter: blur(22px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .header-panel {
@@ -228,7 +236,7 @@ button:focus-visible {
 
 .header-copy span {
   color: var(--green-800);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 840;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -236,15 +244,15 @@ button:focus-visible {
 
 .header-copy strong {
   color: var(--ink);
-  font-size: clamp(1.35rem, 2vw, 2.2rem);
+  font-size: clamp(1.15rem, 1.5vw, 1.45rem);
   font-weight: 840;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .header-copy p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 620;
 }
 
@@ -323,9 +331,14 @@ button:focus-visible {
   padding: 8px 14px;
   border-radius: 12px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   width: fit-content;
   white-space: nowrap;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .badge-flag {
@@ -553,12 +566,12 @@ button:focus-visible {
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.56);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
   box-shadow: 0 16px 32px rgba(3, 47, 40, 0.12);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
   transition: transform 170ms ease, background 170ms ease, box-shadow 170ms ease;
 }
 
@@ -1916,11 +1929,14 @@ button:focus-visible {
   max-height: 780px;
   border: 1px solid rgba(255, 255, 255, 0.34);
   border-radius: 22px;
-  clip-path: inset(0 round 22px);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 251, 247, 0.94)),
     #fff;
   box-shadow: 0 20px 40px rgba(3, 47, 40, 0.18);
+  -webkit-overflow-scrolling: touch;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .performance-table {
@@ -1948,7 +1964,6 @@ button:focus-visible {
   color: #101815;
   font-size: 0.88rem;
   font-weight: 860;
-  will-change: transform;
   text-align: center;
 }
 
@@ -1986,7 +2001,6 @@ button:focus-visible {
   color: #101815;
   font-weight: 880;
   box-shadow: 0 -2px 10px rgba(3, 47, 40, 0.05);
-  will-change: transform;
 }
 
 .performance-table .is-left {
@@ -2016,6 +2030,10 @@ button:focus-visible {
   border-radius: 10px;
   position: relative;
   z-index: 1;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .creative-thumbnail-link:hover {
@@ -2070,7 +2088,6 @@ button:focus-visible {
   position: sticky;
   left: 0;
   z-index: 10;
-  will-change: transform;
 }
 
 .performance-table th:nth-child(2),
@@ -2082,7 +2099,6 @@ button:focus-visible {
   min-width: 100px;
   max-width: 100px;
   text-align: left;
-  will-change: transform;
 }
 
 .performance-table th:nth-child(3),
@@ -2091,7 +2107,6 @@ button:focus-visible {
   left: 148px;
   z-index: 10;
   border-right: 1px solid rgba(3, 47, 40, 0.12);
-  will-change: transform;
 }
 
 /* Creative tab sticky overrides to lock the image and the wider Ad Name */
@@ -2106,7 +2121,6 @@ button:focus-visible {
   left: 248px;
   z-index: 10;
   border-right: 1px solid rgba(3, 47, 40, 0.12);
-  will-change: transform;
 }
 
 /* Opaque Solid Backgrounds for Locked Columns (prevents overlapping scrolled text) */
@@ -2175,7 +2189,7 @@ button:focus-visible {
     #fff;
   color: var(--ink);
   box-shadow: 0 10px 22px rgba(3, 47, 40, 0.07), inset 0 1px 0 #fff;
-  backdrop-filter: blur(20px);
+  backdrop-filter: none;
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
@@ -3055,12 +3069,14 @@ button:focus-visible {
 
 .pacing-view-toggle {
   display: flex;
-  background: rgba(3, 47, 40, 0.05);
+  background: rgba(255, 255, 255, 0.45);
   padding: 4px;
   border-radius: 14px;
-  border: 1px solid rgba(3, 47, 40, 0.08);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 2px rgba(3, 47, 40, 0.02);
   position: relative;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 /* Sliding active indicator for pacing */
@@ -4763,7 +4779,6 @@ button:focus-visible {
 
 .animate-entry {
   animation: slideUpFadeIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
 }
 
 /* Premium Staggered Layout Transitions */
@@ -5036,6 +5051,151 @@ button:focus-visible {
   position: relative;
   z-index: 40 !important;
 }
+
+/* Premium Switch & Tab Enhancements */
+.pacing-switch-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 14px;
+  padding: 6px 14px;
+  cursor: pointer;
+  user-select: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 38px;
+  box-shadow: 0 4px 18px rgba(3, 47, 40, 0.02);
+  box-sizing: border-box;
+}
+
+.pacing-switch-container:hover {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 6px 20px rgba(3, 47, 40, 0.04);
+}
+
+.pacing-custom-switch {
+  width: 32px;
+  height: 18px;
+  background: rgba(3, 47, 40, 0.15);
+  border-radius: 20px;
+  position: relative;
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pacing-custom-switch.is-checked {
+  background: #028a4f;
+}
+
+.pacing-switch-handle {
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.pacing-custom-switch.is-checked .pacing-switch-handle {
+  left: 17px;
+}
+
+.pacing-switch-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(20, 32, 28, 0.75);
+  letter-spacing: 0.2px;
+}
+
+.badge-loading-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 159, 28, 0.25);
+  border-top-color: #ff9f1c; /* Orange matching loading */
+  border-radius: 50%;
+  animation: spinner-rotate 0.8s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* Elevate stacking context of any filter parent wrapper that has an open dropdown menu */
+.filter-control-wrap:has([aria-expanded="true"]),
+.performance-filter-wrap:has([aria-expanded="true"]),
+.comparison-filter-wrap:has([aria-expanded="true"]),
+.header-date-filter-wrap:has([aria-expanded="true"]),
+.meta-item.is-month-selector[aria-expanded="true"] {
+  position: relative;
+  z-index: 1500 !important;
+}
+
+/* Elevate grandparent containers up the DOM tree to prevent z-index caps from hiding dropdowns */
+.performance-head:has([aria-expanded="true"]),
+.pacing-header-row:has([aria-expanded="true"]),
+.filter-bar:has([aria-expanded="true"]),
+.top-actions:has([aria-expanded="true"]) {
+  position: relative;
+  z-index: 1600 !important;
+}
+
+.filter-menu,
+.performance-menu,
+.comparison-menu,
+.pacing-month-menu,
+.date-picker-menu {
+  z-index: 2000 !important;
+}
+
+/* Hardware GPU layer promotion for sticky table headers and columns to eliminate scroll tearing and jitter */
+.performance-table th,
+.performance-table td[style*="position: sticky"],
+.performance-table th:nth-child(1),
+.performance-table td:nth-child(1),
+.performance-table th:nth-child(2),
+.performance-table td:nth-child(2),
+.performance-table th:nth-child(3),
+.performance-table td:nth-child(3),
+.performance-table th:nth-child(4),
+.performance-table td:nth-child(4),
+.performance-table tfoot td {
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Table Column Sort Indicators */
+.sort-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.72rem;
+  opacity: 0.28;
+  color: #fff;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  font-weight: normal;
+  line-height: 1;
+}
+
+th:hover .sort-indicator {
+  opacity: 0.65;
+}
+
+.sort-indicator.is-active {
+  opacity: 1;
+  color: #7cf45c !important; /* Brand green */
+  font-weight: bold;
+}
+
 
 
 

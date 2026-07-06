@@ -26,6 +26,9 @@ const state = {
   pacingTab: "monthly",
   pacingMonth: null,
   pacingActiveOnly: true,
+  comparisonMode: "previous-period",
+  sortColumn: "",
+  sortDirection: "desc",
   currentUser: null,
   authError: null,
   authLoading: false,
@@ -199,8 +202,8 @@ const metricIcons = {
   "CVR Booking": "badge-check",
   "CVR ( Booking )": "badge-check",
   CPB: "ticket-check",
-  "CTA Installs": "download-cloud",
-  "CTA Booking": "check-square",
+  "CTA Installs": "cloud-download",
+  "CTA Booking": "square-check",
 };
 
 const metricSections = [
@@ -449,7 +452,7 @@ function optionsForFilter(filterId) {
 }
 
 function dateBoundsForMarket() {
-  const rows = state.market === "ALL" ? state.data.rows : state.data.rows.filter((row) => row.market === state.market);
+  const rows = state.data.rows;
   const starts = rows.map((row) => row.dateStart).filter(Boolean).sort();
   const ends = rows.map((row) => row.dateEnd).filter(Boolean).sort();
   
@@ -505,14 +508,36 @@ function aggregateRows(rows) {
   const bookings = sumRows(rows, "bookings");
   const ctaInstalls = sumRows(rows, "ctaInstalls");
   const ctaBookings = sumRows(rows, "ctaBookings");
-  const prevSpend = sumRows(rows, "prevSpend");
-  const prevImpressions = sumRows(rows, "prevImpressions");
-  const prevLinkClicks = sumRows(rows, "prevLinkClicks");
-  const prevLandingPageViews = sumRows(rows, "prevLandingPageViews");
-  const prevInstalls = sumRows(rows, "prevInstalls");
-  const prevBookings = sumRows(rows, "prevBookings");
-  const prevCtaInstalls = sumRows(rows, "prevCtaInstalls");
-  const prevCtaBookings = sumRows(rows, "prevCtaBookings");
+  let prevRows = [];
+  if (state.dateStart && state.dateEnd) {
+    let prevStartStr, prevEndStr;
+    if (state.comparisonMode === "yoy") {
+      prevStartStr = shiftYear(state.dateStart, -1);
+      prevEndStr = shiftYear(state.dateEnd, -1);
+    } else {
+      const diffDays = getDaysBetween(state.dateStart, state.dateEnd) + 1;
+      prevStartStr = addDays(state.dateStart, -diffDays);
+      prevEndStr = addDays(state.dateEnd, -diffDays);
+    }
+
+    prevRows = state.data.rows.filter((row) => {
+      if (state.market !== "ALL" && row.market !== state.market) return false;
+      if (state.objective !== "ALL" && row.objective !== state.objective) return false;
+      if (state.target !== "ALL" && row.target !== state.target) return false;
+      if (state.campaign !== "ALL" && row.campaign !== state.campaign) return false;
+      return row.dateStart <= prevEndStr && row.dateEnd >= prevStartStr;
+    });
+  }
+
+  const hasPrevRows = prevRows.length > 0;
+  const prevSpend = hasPrevRows ? sumRows(prevRows, "spend") : sumRows(rows, "prevSpend");
+  const prevImpressions = hasPrevRows ? sumRows(prevRows, "impressions") : sumRows(rows, "prevImpressions");
+  const prevLinkClicks = hasPrevRows ? sumRows(prevRows, "linkClicks") : sumRows(rows, "prevLinkClicks");
+  const prevLandingPageViews = hasPrevRows ? sumRows(prevRows, "landingPageViews") : sumRows(rows, "prevLandingPageViews");
+  const prevInstalls = hasPrevRows ? sumRows(prevRows, "installs") : sumRows(rows, "prevInstalls");
+  const prevBookings = hasPrevRows ? sumRows(prevRows, "bookings") : sumRows(rows, "prevBookings");
+  const prevCtaInstalls = hasPrevRows ? sumRows(prevRows, "ctaInstalls") : sumRows(rows, "prevCtaInstalls");
+  const prevCtaBookings = hasPrevRows ? sumRows(prevRows, "ctaBookings") : sumRows(rows, "prevCtaBookings");
   const firstRow = rows[0] || {};
 
   return {
@@ -880,6 +905,21 @@ function renderHeader() {
     </div>
   `;
 
+  const compControlKey = "comparison-mode";
+  const comparisonFilterHtml = `
+    <div class="filter-control-wrap comparison-filter-wrap">
+      <button class="filter-chip comparison-chip" type="button" data-action="toggle-filter" data-control="${compControlKey}" aria-expanded="${state.openControl === compControlKey}">
+        <span class="filter-icon"><img src="${iconUrl("git-compare")}" alt="" style="width: 14px; height: 14px;" /></span>
+        <span class="filter-copy">
+          <span>Compare vs</span>
+          <strong>${state.comparisonMode === "yoy" ? "Previous Year (YoY)" : "Previous Period"}</strong>
+        </span>
+        <img class="chevron" src="${iconUrl(state.openControl === compControlKey ? "chevron-up" : "chevron-down")}" alt="" />
+      </button>
+      ${state.openControl === compControlKey ? renderComparisonMenu() : ""}
+    </div>
+  `;
+
   return `
     <header class="topbar">
       <section class="header-panel" aria-label="Report header">
@@ -891,10 +931,26 @@ function renderHeader() {
         </div>
         <section class="top-actions" aria-label="Dashboard actions">
           ${dateFilterHtml}
+          ${comparisonFilterHtml}
           <div class="dept-mark">DEPT<span>®</span></div>
         </section>
       </section>
     </header>
+  `;
+}
+
+function renderComparisonMenu() {
+  return `
+    <div class="filter-menu comparison-menu" role="listbox" style="position: absolute; top: calc(100% + 8px); right: 0; z-index: 100; width: 220px; padding: 6px;">
+      <button class="filter-option${state.comparisonMode === "previous-period" ? " is-selected" : ""}" type="button" data-action="select-comparison-mode" data-value="previous-period">
+        <span>Previous Period</span>
+        ${state.comparisonMode === "previous-period" ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="check-icon" style="margin-left: auto; width: 12px; height: 12px; color: #028a4f;"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ""}
+      </button>
+      <button class="filter-option${state.comparisonMode === "yoy" ? " is-selected" : ""}" type="button" data-action="select-comparison-mode" data-value="yoy">
+        <span>Previous Year (YoY)</span>
+        ${state.comparisonMode === "yoy" ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="check-icon" style="margin-left: auto; width: 12px; height: 12px; color: #028a4f;"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ""}
+      </button>
+    </div>
   `;
 }
 
@@ -1421,6 +1477,21 @@ function renderMetric(metric, index) {
   const cardIcon = metricIcons[metric.label] || "activity";
   
   const numberAnimClass = state.tabSwitched ? " animate-number" : "";
+  let comparisonLabel = "vs previous week";
+  if (state.dateStart && state.dateEnd) {
+    const diffDays = getDaysBetween(state.dateStart, state.dateEnd) + 1;
+    if (state.comparisonMode === "yoy") {
+      comparisonLabel = "vs same period last year";
+    } else if (diffDays > 7) {
+      if (diffDays <= 14) {
+        comparisonLabel = "vs previous 2 weeks";
+      } else if (diffDays <= 31) {
+        comparisonLabel = "vs previous month";
+      } else {
+        comparisonLabel = "vs previous period";
+      }
+    }
+  }
 
   return `
     <article class="metric-card metric-${tone}${featured}" 
@@ -1443,7 +1514,7 @@ function renderMetric(metric, index) {
       <span class="metric-icon"><img src="${iconUrl(cardIcon)}" alt="" /></span>
       <div class="metric-bottom">
         ${timeline}
-        ${timeline ? "" : `<span>vs previous week</span>`}
+        ${timeline ? "" : `<span>${comparisonLabel}</span>`}
       </div>
     </article>
   `;
@@ -2566,6 +2637,22 @@ function addDays(dateStr, days) {
   return `${ry}-${rm}-${rd}`;
 }
 
+function shiftYear(dateStr, offset = -1) {
+  if (!dateStr) return "";
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return "";
+  let y = parseInt(parts[0], 10) + offset;
+  let m = parts[1];
+  let d = parts[2];
+  if (m === "02" && d === "29") {
+    const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+    if (!isLeap) {
+      d = "28";
+    }
+  }
+  return `${y}-${m}-${d}`;
+}
+
 function parseDateStr(str) {
   const p = str.split('-');
   return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
@@ -2945,23 +3032,25 @@ function renderPacingView(animateClass = "") {
       const dayStr = addDays(r.dateStart, i);
       const val = timelineData[i] || 0;
 
-      if (dayStr >= monthStartStr && dayStr <= monthEndStr) {
-        cData.monthlySpend += val;
-      }
+      if (dayStr <= maxDateStr) {
+        if (dayStr >= monthStartStr && dayStr <= monthEndStr) {
+          cData.monthlySpend += val;
+        }
 
-      if (campaignStartStr && campaignEndStr) {
-        if (dayStr >= campaignStartStr && dayStr <= campaignEndStr) {
+        if (campaignStartStr && campaignEndStr) {
+          if (dayStr >= campaignStartStr && dayStr <= campaignEndStr) {
+            cData.lifetimeSpend += val;
+          }
+        } else {
           cData.lifetimeSpend += val;
         }
-      } else {
-        cData.lifetimeSpend += val;
-      }
 
-      if (dayStr === maxDateStr) {
-        cData.yesterdaySpend += val;
-      }
+        if (dayStr === maxDateStr) {
+          cData.yesterdaySpend += val;
+        }
 
-      cData.totalSpend += val;
+        cData.totalSpend += val;
+      }
     }
   });
 
@@ -2984,16 +3073,22 @@ function renderPacingView(animateClass = "") {
     const budgetObj = state.campaignBudgets[name] || {};
     const hasConfig = state.campaignBudgets[name] !== undefined;
 
-    let isKeep = isMonthly 
-      ? (cData.monthlySpend > 0 || hasConfig)
-      : (cData.totalSpend > 0 || hasConfig);
+    let isKeep = true;
 
     if (state.pacingActiveOnly) {
       if (isMonthly) {
         isKeep = cData.monthlySpend > 0;
       } else {
-        isKeep = cData.totalSpend > 0;
+        const campaignStartStr = budgetObj.start_date || "";
+        const campaignEndStr = budgetObj.end_date || "";
+        if (campaignStartStr && campaignEndStr) {
+          isKeep = (maxDateStr >= campaignStartStr && maxDateStr <= campaignEndStr);
+        } else {
+          isKeep = cData.yesterdaySpend > 0;
+        }
       }
+    } else {
+      isKeep = cData.totalSpend > 0 || hasConfig;
     }
 
     if (isKeep) {
@@ -3045,6 +3140,32 @@ function renderPacingView(animateClass = "") {
       lifetimeElapsedPct
     };
   });
+
+  // Apply sorting to pacing rows!
+  if (state.sortColumn && state.sortDirection) {
+    const col = state.sortColumn;
+    const dir = state.sortDirection === "asc" ? 1 : -1;
+    
+    campaignPacingRows.sort((a, b) => {
+      let valA = a[col];
+      let valB = b[col];
+      
+      if (typeof valA === "string") {
+        return valA.localeCompare(valB) * dir;
+      }
+      
+      valA = Number(valA) || 0;
+      valB = Number(valB) || 0;
+      return (valA - valB) * dir;
+    });
+  } else {
+    // Default sort by spend descending
+    campaignPacingRows.sort((a, b) => {
+      const spendA = isMonthly ? a.monthlySpend : a.lifetimeSpend;
+      const spendB = isMonthly ? b.monthlySpend : b.lifetimeSpend;
+      return spendB - spendA;
+    });
+  }
 
   const unsaved = hasUnsavedBudgets();
 
@@ -3189,29 +3310,49 @@ function renderPacingView(animateClass = "") {
     }
   }).join("");
 
-  const tableHeadersHtml = isMonthly
-    ? `
-      <tr>
-        <th class="row-number" aria-label="Row number"></th>
-        <th class="is-left is-wide">Campaign Name</th>
-        <th class="is-right" style="width: 130px;">Yesterday Spend</th>
-        <th class="is-right" style="width: 140px;">Monthly Budget</th>
-        <th class="is-right" style="width: 130px;">Monthly Spend</th>
-        <th class="is-right" style="width: 160px;">Spent %</th>
-        <th class="is-center" style="width: 170px;">Pacing vs Target</th>
-      </tr>
-    `
-    : `
-      <tr>
-        <th class="row-number" aria-label="Row number"></th>
-        <th class="is-left is-wide">Campaign Name</th>
-        <th class="is-center" style="width: 220px; min-width: 220px;">Campaign Dates</th>
-        <th class="is-right" style="width: 140px;">Lifetime Budget</th>
-        <th class="is-right" style="width: 130px;">Lifetime Spend</th>
-        <th class="is-right" style="width: 160px;">Spent %</th>
-        <th class="is-center" style="width: 170px;">Pacing vs Target</th>
-      </tr>
-    `;
+  const pacingColumns = isMonthly
+    ? [
+        { key: "name", label: "Campaign Name", align: "left", wide: true },
+        { key: "yesterdaySpend", label: "Yesterday Spend", align: "right", style: "width: 130px;" },
+        { key: "monthlyBudget", label: "Monthly Budget", align: "right", style: "width: 140px;" },
+        { key: "monthlySpend", label: "Monthly Spend", align: "right", style: "width: 130px;" },
+        { key: "monthlySpentPct", label: "Spent %", align: "right", style: "width: 160px;" },
+        { key: "monthlyPacingPercent", label: "Pacing vs Target", align: "center", style: "width: 170px;" }
+      ]
+    : [
+        { key: "name", label: "Campaign Name", align: "left", wide: true },
+        { key: "startDateStr", label: "Campaign Dates", align: "center", style: "width: 220px; min-width: 220px;", nonSortable: true },
+        { key: "lifetimeBudget", label: "Lifetime Budget", align: "right", style: "width: 140px;" },
+        { key: "lifetimeSpend", label: "Lifetime Spend", align: "right", style: "width: 130px;" },
+        { key: "lifetimeSpentPct", label: "Spent %", align: "right", style: "width: 160px;" },
+        { key: "lifetimePacingPercent", label: "Pacing vs Target", align: "center", style: "width: 170px;" }
+      ];
+
+  const tableHeadersHtml = `
+    <tr>
+      <th class="row-number" aria-label="Row number"></th>
+      ${pacingColumns.map(column => {
+        const isSortable = !column.nonSortable;
+        const isSorted = state.sortColumn === column.key;
+        const sortIndicator = isSortable
+          ? `<span class="sort-indicator ${isSorted ? "is-active" : ""}">
+               ${isSorted ? (state.sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+             </span>`
+          : "";
+        const thAttrs = isSortable
+          ? `data-action="sort-table" data-col="${column.key}" style="cursor: pointer; user-select: none;"`
+          : "";
+        return `
+          <th class="${column.align === "left" ? "is-left" : ""}${column.align === "center" ? " is-center" : ""}${column.align === "right" ? " is-right" : ""}${column.wide ? " is-wide" : ""}" ${column.style ? `style="${column.style}"` : ""} ${thAttrs}>
+            <div style="display: inline-flex; align-items: center; gap: 4px; justify-content: inherit;">
+              <span>${column.label}</span>
+              ${sortIndicator}
+            </div>
+          </th>
+        `;
+      }).join("")}
+    </tr>
+  `;
 
   const tableFootersHtml = isMonthly
     ? `
@@ -3351,12 +3492,12 @@ function renderPacingView(animateClass = "") {
             ${btnLifetimeHtml}
           </div>
         </div>
-        <div class="pacing-active-only-wrap" style="display: flex; align-items: center;">
-          <button type="button" data-action="toggle-pacing-active-only" style="background: transparent; border: none; padding: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-            <div class="pacing-custom-switch" style="width: 36px; height: 20px; background: ${state.pacingActiveOnly ? "#028a4f" : "rgba(3, 47, 40, 0.15)"}; border-radius: 20px; position: relative; transition: background 0.25s;">
-              <div class="pacing-switch-handle" style="width: 14px; height: 14px; background: #ffffff; border-radius: 50%; position: absolute; top: 3px; left: ${state.pacingActiveOnly ? "19px" : "3px"}; transition: left 0.25s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);"></div>
+        <div class="pacing-active-only-wrap">
+          <button type="button" class="pacing-switch-container" data-action="toggle-pacing-active-only">
+            <div class="pacing-custom-switch ${state.pacingActiveOnly ? "is-checked" : ""}">
+              <div class="pacing-switch-handle"></div>
             </div>
-            <span style="font-size: 0.82rem; font-weight: 700; color: rgba(20, 32, 28, 0.75);">Active Only</span>
+            <span class="pacing-switch-label">Active Only</span>
           </button>
         </div>
       </div>
@@ -3381,8 +3522,18 @@ function renderPacingView(animateClass = "") {
               </div>
               <div class="meta-divider"></div>
               <div class="meta-item">
-                <span class="meta-label">Active Campaigns</span>
-                <span class="meta-value">${campaignPacingRows.length}</span>
+                <span class="meta-label">Total Monthly Budget</span>
+                <span class="meta-value" style="font-weight: 700; color: #101815;">${formatCurrency(totalMonthlyBudget)}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Total Monthly Spend</span>
+                <span class="meta-value" style="color: #028a4f; font-weight: 700;">${formatCurrency(totalMonthlySpend)}</span>
+              </div>
+              <div class="meta-divider"></div>
+              <div class="meta-item">
+                <span class="meta-label">Overall Spent %</span>
+                <span class="meta-value" style="font-weight: 700; color: #101815;">${totalMonthlyBudget > 0 ? Math.round((totalMonthlySpend / totalMonthlyBudget) * 100) : 0}%</span>
               </div>
               <div class="meta-divider"></div>
               <div class="meta-item">
@@ -3441,7 +3592,32 @@ function renderPerformanceTable() {
     ? `style="width: ${state.lastTabWidth}px; height: ${state.lastTabHeight}px; transform: translate3d(${state.lastTabLeft}px, ${state.lastTabTop}px, 0); opacity: 1;"`
     : `style="opacity: 0;"`;
 
-  const rows = performanceRows();
+  const rawRows = performanceRows();
+  const rows = [...rawRows];
+  
+  if (state.sortColumn && state.sortDirection) {
+    const col = state.sortColumn;
+    const dir = state.sortDirection === "asc" ? 1 : -1;
+    
+    rows.sort((a, b) => {
+      let valA = a[col];
+      let valB = b[col];
+      
+      if (col === "groupLabel") {
+        valA = a.groupLabel || "";
+        valB = b.groupLabel || "";
+      }
+      
+      if (typeof valA === "string") {
+        return valA.localeCompare(valB) * dir;
+      }
+      
+      valA = Number(valA) || 0;
+      valB = Number(valB) || 0;
+      return (valA - valB) * dir;
+    });
+  }
+
   const total = aggregateRows(rows.flatMap((row) => row.rows));
   total.isTotal = true;
   total.objective = "";
@@ -3466,7 +3642,22 @@ function renderPerformanceTable() {
                 const label = column.key === "groupLabel"
                   ? (state.tableTab === "creative" ? "Ad Name" : (state.tableTab === "campaign" ? "Campaign Name" : "Weekly"))
                   : column.label;
-                return `<th class="${column.align === "left" ? "is-left" : ""}${column.align === "center" ? " is-center" : ""}${column.key === "creativeImageUrl" ? " is-image" : ""}${column.wide ? " is-wide" : ""}">${label}</th>`;
+                const isSortable = column.key !== "creativeImageUrl";
+                const isSorted = state.sortColumn === column.key;
+                const sortIndicator = isSortable
+                  ? `<span class="sort-indicator ${isSorted ? "is-active" : ""}">
+                       ${isSorted ? (state.sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                     </span>`
+                  : "";
+                const thAttrs = isSortable
+                  ? `data-action="sort-table" data-col="${column.key}" style="cursor: pointer; user-select: none;"`
+                  : "";
+                return `<th class="${column.align === "left" ? "is-left" : ""}${column.align === "center" ? " is-center" : ""}${column.key === "creativeImageUrl" ? " is-image" : ""}${column.wide ? " is-wide" : ""}" ${thAttrs}>
+                          <div style="display: inline-flex; align-items: center; gap: 4px; justify-content: inherit;">
+                            <span>${label}</span>
+                            ${sortIndicator}
+                          </div>
+                        </th>`;
               }).join("")}
             </tr>
           </thead>
@@ -3541,7 +3732,10 @@ function renderScorecard() {
         </div>
         <div class="scorecard-head-status">
           ${renderUserAuthBadge()}
-          <span class="data-source-indicator${sourceTone()}">${dataSourceLabel()}</span>
+          <span class="data-source-indicator${sourceTone()}">
+            ${state.data.source === "loading-live" ? `<span class="badge-loading-spinner"></span>` : ""}
+            ${dataSourceLabel()}
+          </span>
         </div>
       </div>
       <section class="filter-bar" aria-label="Dashboard filters">${filterConfig.map(renderFilter).join("")}</section>
@@ -3658,6 +3852,45 @@ function render() {
   }
 }
 
+function performPartialRender() {
+  const perfPanel = document.querySelector(".performance-panel");
+  if (!perfPanel) {
+    render();
+    return;
+  }
+  
+  // Save scroll positions
+  const scrollContainers = perfPanel.querySelectorAll(".table-scroll");
+  const scrollPositions = Array.from(scrollContainers).map(el => ({
+    left: el.scrollLeft,
+    top: el.scrollTop
+  }));
+
+  captureActiveButtonPositions();
+  
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = renderPerformanceTable();
+  const newPanel = tempDiv.querySelector(".performance-panel");
+  if (newPanel) {
+    perfPanel.innerHTML = newPanel.innerHTML;
+    perfPanel.className = newPanel.className;
+    postRender();
+    state.tabSwitched = false;
+
+    // Restore scroll positions
+    const newContainers = perfPanel.querySelectorAll(".table-scroll");
+    newContainers.forEach((el, idx) => {
+      const pos = scrollPositions[idx];
+      if (pos) {
+        el.scrollLeft = pos.left;
+        el.scrollTop = pos.top;
+      }
+    });
+  } else {
+    render();
+  }
+}
+
 function postRender() {
   const calendarMenu = document.querySelector(".date-picker-menu");
   if (calendarMenu) {
@@ -3675,9 +3908,9 @@ function updateActiveIndicators() {
     const indicator = marketStrip.querySelector(".market-active-indicator");
     if (activeBtn && indicator) {
       requestAnimationFrame(() => {
-        indicator.style.width = `${activeBtn.offsetWidth}px`;
-        indicator.style.height = `${activeBtn.offsetHeight}px`;
-        indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
+        indicator.style.width = `${Math.round(activeBtn.offsetWidth)}px`;
+        indicator.style.height = `${Math.round(activeBtn.offsetHeight)}px`;
+        indicator.style.transform = `translate3d(${Math.round(activeBtn.offsetLeft)}px, ${Math.round(activeBtn.offsetTop)}px, 0)`;
         indicator.style.opacity = "1";
       });
     }
@@ -3690,9 +3923,9 @@ function updateActiveIndicators() {
     const indicator = pacingToggle.querySelector(".pacing-active-indicator");
     if (activeBtn && indicator) {
       requestAnimationFrame(() => {
-        indicator.style.width = `${activeBtn.offsetWidth}px`;
-        indicator.style.height = `${activeBtn.offsetHeight}px`;
-        indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
+        indicator.style.width = `${Math.round(activeBtn.offsetWidth)}px`;
+        indicator.style.height = `${Math.round(activeBtn.offsetHeight)}px`;
+        indicator.style.transform = `translate3d(${Math.round(activeBtn.offsetLeft)}px, ${Math.round(activeBtn.offsetTop)}px, 0)`;
         indicator.style.opacity = "1";
       });
     }
@@ -3705,9 +3938,9 @@ function updateActiveIndicators() {
     const indicator = tableTabsWrap.querySelector(".tabs-active-indicator");
     if (activeBtn && indicator) {
       requestAnimationFrame(() => {
-        indicator.style.width = `${activeBtn.offsetWidth}px`;
-        indicator.style.height = `${activeBtn.offsetHeight}px`;
-        indicator.style.transform = `translate3d(${activeBtn.offsetLeft}px, ${activeBtn.offsetTop}px, 0)`;
+        indicator.style.width = `${Math.round(activeBtn.offsetWidth)}px`;
+        indicator.style.height = `${Math.round(activeBtn.offsetHeight)}px`;
+        indicator.style.transform = `translate3d(${Math.round(activeBtn.offsetLeft)}px, ${Math.round(activeBtn.offsetTop)}px, 0)`;
         indicator.style.opacity = "1";
       });
     }
@@ -3720,10 +3953,10 @@ function captureActiveButtonPositions() {
   if (marketStrip) {
     const activeBtn = marketStrip.querySelector(".flag-button.is-active");
     if (activeBtn) {
-      state.lastMarketLeft = activeBtn.offsetLeft;
-      state.lastMarketWidth = activeBtn.offsetWidth;
-      state.lastMarketHeight = activeBtn.offsetHeight;
-      state.lastMarketTop = activeBtn.offsetTop;
+      state.lastMarketLeft = Math.round(activeBtn.offsetLeft);
+      state.lastMarketWidth = Math.round(activeBtn.offsetWidth);
+      state.lastMarketHeight = Math.round(activeBtn.offsetHeight);
+      state.lastMarketTop = Math.round(activeBtn.offsetTop);
     }
   }
 
@@ -3732,10 +3965,10 @@ function captureActiveButtonPositions() {
   if (pacingToggle) {
     const activeBtn = pacingToggle.querySelector(".pacing-toggle-btn.is-active");
     if (activeBtn) {
-      state.lastPacingLeft = activeBtn.offsetLeft;
-      state.lastPacingWidth = activeBtn.offsetWidth;
-      state.lastPacingHeight = activeBtn.offsetHeight;
-      state.lastPacingTop = activeBtn.offsetTop;
+      state.lastPacingLeft = Math.round(activeBtn.offsetLeft);
+      state.lastPacingWidth = Math.round(activeBtn.offsetWidth);
+      state.lastPacingHeight = Math.round(activeBtn.offsetHeight);
+      state.lastPacingTop = Math.round(activeBtn.offsetTop);
     }
   }
 
@@ -3744,10 +3977,10 @@ function captureActiveButtonPositions() {
   if (tableTabsWrap) {
     const activeBtn = tableTabsWrap.querySelector("button.is-active");
     if (activeBtn) {
-      state.lastTabLeft = activeBtn.offsetLeft;
-      state.lastTabWidth = activeBtn.offsetWidth;
-      state.lastTabHeight = activeBtn.offsetHeight;
-      state.lastTabTop = activeBtn.offsetTop;
+      state.lastTabLeft = Math.round(activeBtn.offsetLeft);
+      state.lastTabWidth = Math.round(activeBtn.offsetWidth);
+      state.lastTabHeight = Math.round(activeBtn.offsetHeight);
+      state.lastTabTop = Math.round(activeBtn.offsetTop);
     }
   }
 }
@@ -3760,9 +3993,7 @@ if (!window.hasResizeIndicatorListener) {
 function setFilter(filterId, value) {
   const filter = filterConfig.find((item) => item.id === filterId);
   if (!filter) return;
-  if (filter.options.includes(value)) {
-    state[filterId] = value;
-  }
+  state[filterId] = value;
 }
 
 function syncFilterOptionsFromData() {
@@ -3846,43 +4077,59 @@ async function loadSavedWeeks() {
   }
 }
 
+let latestCommentaryRequest = null;
+
 async function loadCommentary() {
-  if (state.commentaryLoading) return;
+  const reqId = Math.random().toString(36).substring(2);
+  latestCommentaryRequest = reqId;
+
   state.commentaryLoading = true;
   state.commentaryText = "";
   state.originalCommentaryText = "";
   render();
 
+  const reqMarket = state.market;
+  const reqStart = state.dateStart;
+  const reqEnd = state.dateEnd;
+  const reqObj = state.objective;
+  const reqTgt = state.target;
+  const reqCmp = state.campaign;
+  const reqPlat = state.platform;
+
   try {
-    const url = `/api/commentary?market=${encodeURIComponent(state.market)}` +
-                `&date_start=${encodeURIComponent(state.dateStart)}` +
-                `&date_end=${encodeURIComponent(state.dateEnd)}` +
-                `&objective=${encodeURIComponent(state.objective)}` +
-                `&target=${encodeURIComponent(state.target)}` +
-                `&campaign=${encodeURIComponent(state.campaign)}` +
-                `&platform=${encodeURIComponent(state.platform)}`;
+    const url = `/api/commentary?market=${encodeURIComponent(reqMarket)}` +
+                `&date_start=${encodeURIComponent(reqStart)}` +
+                `&date_end=${encodeURIComponent(reqEnd)}` +
+                `&objective=${encodeURIComponent(reqObj)}` +
+                `&target=${encodeURIComponent(reqTgt)}` +
+                `&campaign=${encodeURIComponent(reqCmp)}` +
+                `&platform=${encodeURIComponent(reqPlat)}`;
     
     const response = await fetch(url);
     if (response.ok) {
       const data = await response.json();
-      if (data && data.commentary !== undefined) {
-        state.commentaryText = data.commentary || "";
-        state.originalCommentaryText = data.commentary || "";
-        state.commentaryStatus = data.status || "Draft";
-        state.commentaryChips = data.chips || [];
-      } else {
-        state.commentaryText = "";
-        state.originalCommentaryText = "";
-        state.commentaryStatus = "Draft";
-        state.commentaryChips = [];
+      if (latestCommentaryRequest === reqId) {
+        if (data && data.commentary !== undefined) {
+          state.commentaryText = data.commentary || "";
+          state.originalCommentaryText = data.commentary || "";
+          state.commentaryStatus = data.status || "Draft";
+          state.commentaryChips = data.chips || [];
+        } else {
+          state.commentaryText = "";
+          state.originalCommentaryText = "";
+          state.commentaryStatus = "Draft";
+          state.commentaryChips = [];
+        }
+        state.commentaryEditMode = false;
       }
-      state.commentaryEditMode = false;
     }
   } catch (error) {
     console.error("Failed to load commentary:", error);
   } finally {
-    state.commentaryLoading = false;
-    render();
+    if (latestCommentaryRequest === reqId) {
+      state.commentaryLoading = false;
+      render();
+    }
   }
 }
 
@@ -4184,7 +4431,7 @@ document.addEventListener("click", (event) => {
   const triggerButton = document.querySelector(`[data-control="${state.openControl}"]`);
   if (!triggerButton) return;
 
-  const container = triggerButton.closest(".filter-control-wrap, .performance-filter-wrap, .saved-notes-dropdown-wrap");
+  const container = triggerButton.closest(".filter-control-wrap, .performance-filter-wrap, .saved-notes-dropdown-wrap, .comparison-filter-wrap");
   if (!container) return;
 
   if (!container.contains(event.target)) {
@@ -4351,17 +4598,26 @@ app.addEventListener("click", (event) => {
     state.tableTab = control.dataset.tab;
     state.openControl = null;
     state.tabSwitched = true;
+    performPartialRender();
+    return;
   }
 
   if (control.dataset.action === "pacing-tab") {
     state.pacingTab = control.dataset.tab;
     state.tabSwitched = true;
-    render();
+    performPartialRender();
     return;
   }
 
   if (control.dataset.action === "toggle-pacing-active-only") {
     state.pacingActiveOnly = !state.pacingActiveOnly;
+    performPartialRender();
+    return;
+  }
+
+  if (control.dataset.action === "select-comparison-mode") {
+    state.comparisonMode = control.dataset.value;
+    state.openControl = null;
     render();
     return;
   }
@@ -4370,6 +4626,18 @@ app.addEventListener("click", (event) => {
     state.pacingMonth = control.dataset.value;
     state.openControl = null;
     render();
+    return;
+  }
+
+  if (control.dataset.action === "sort-table") {
+    const col = control.dataset.col;
+    if (state.sortColumn === col) {
+      state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      state.sortColumn = col;
+      state.sortDirection = "desc";
+    }
+    performPartialRender();
     return;
   }
 
@@ -4456,6 +4724,8 @@ app.addEventListener("click", (event) => {
       state.platform = platform;
       state.sparklinesAnimated = false;
       state.tabSwitched = true;
+      state.initialLoading = true;
+      state.data.rows = [];
       state.data.source = "loading";
       state.data.message = "Loading platform data...";
       state.openControl = null;
@@ -4549,10 +4819,8 @@ app.addEventListener("change", (event) => {
         obj.monthly_budget = budgetValue;
       }
       localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
-      render();
-    } else {
-      render();
     }
+    performPartialRender();
     return;
   }
 
@@ -4562,7 +4830,7 @@ app.addEventListener("change", (event) => {
     const obj = getCampaignBudgetsObject(campaignName);
     obj.start_date = val;
     localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
-    render();
+    performPartialRender();
     return;
   }
 
@@ -4572,9 +4840,10 @@ app.addEventListener("change", (event) => {
     const obj = getCampaignBudgetsObject(campaignName);
     obj.end_date = val;
     localStorage.setItem("thefork_campaign_budgets", JSON.stringify(state.campaignBudgets));
-    render();
+    performPartialRender();
     return;
   }
+
 
   const field = event.target.closest("[data-date-field]");
   if (!field) return;

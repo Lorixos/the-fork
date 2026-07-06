@@ -67,3 +67,16 @@
 - After any meaningful UI change, verify with screenshots at desktop and mobile widths.
 - Check for these issues before final response: crowding, inconsistent radii, misaligned controls, poor vertical centering, overlarge gaps, clipped text, broken icons/assets, and visual hierarchy drift.
 - If a screenshot reveals a pattern issue, fix the pattern and rerun the screenshot before handing back.
+
+## 2026-07-06 - Quality Assurance & Regression Prevention Rules
+
+### Technical Guardrails & Defensive Code
+- **Value Assertions**: Avoid assuming that values or properties exist in data pipelines (such as date formatting, pacing calculations, or active row mapping). Provide strict fallbacks and defaults (e.g. `obj || { budget: 0 }`) to prevent minor data gaps or empty configs from crashing the UI render cycle.
+- **Targeted Partial Updates**: Avoid monolithic `innerHTML` re-renders when updating interactive child elements (like table tab switches, filters, active switches, or input changes). Use targeted element swaps to preserve parent DOM containers, scroll offsets, and animation states.
+- **Animation Boundaries**: Ensure any temporary state variables (such as `state.tabSwitched`) used to trigger entrance transitions are immediately cleared after rendering (`state.tabSwitched = false`) so that subsequent interactions (like column sorting or budget edits) do not cause flickering or double animations.
+
+### Regression Prevention Protocol
+- **Local Dev Server Diagnostics**: Keep the background Node server running and inspect terminal stdout/stderr logs after editing to verify no runtime warning flags or server-side syntax bugs were introduced.
+- **Multi-Browser Rendering Audits**: Test page performance, scroll composition, GPU layer paint offsets, and text antialiasing explicitly on Safari, Brave, and Chrome.
+- **Layout Collapsing Protection**: Ensure root containers (like the `html` background selector) are styled with dark colors matching the dashboard theme (`#011611`) to prevent light off-white background flashes when elements are redrawn or height collapses during page reloads.
+

@@ -383,11 +383,24 @@ app.get('/api/performance', async (req, res) => {
 
   const videoViewsP100Select = isTiktok ? "0 AS video_views_p100" : "video_views_p100";
   const ctaSelect = isTiktok ? "cta_app_install, cta_purchase" : "0 AS cta_app_install, 0 AS cta_purchase";
+  const iosInstallsSelect = isTiktok ? "skan_app_install" : "0 AS skan_app_install";
+
+  const marketSelect = isTiktok ? `
+    CASE
+      WHEN Market = '6886783684171530241' OR Market = 'IT' THEN 'IT'
+      WHEN Market = '7068331270811533314' OR Market = 'PT' THEN 'PT'
+      WHEN Market = '6982545462632906753' OR Market = 'ES' THEN 'ES'
+      WHEN Market = '6982545611807555586' OR Market = 'FR' THEN 'FR'
+      WHEN Market = '7015602279810138113' OR Market = 'UK' THEN 'UK'
+      WHEN Market = '7190030035821166594' OR Market = 'BE' THEN 'BE'
+      WHEN Market = '7071236272924262402' OR Market = 'AU' THEN 'AU'
+      ELSE Market
+    END AS Market` : "Market";
 
   const query = `
     SELECT 
       day,
-      Market,
+      ${marketSelect},
       Campaign_1,
       Campaign_2,
       Campaign_5,
@@ -400,6 +413,7 @@ app.get('/api/performance', async (req, res) => {
       video_views,
       ${videoViewsP100Select},
       ${ctaSelect},
+      ${iosInstallsSelect},
       costs,
       impressions,
       outbound_clicks,
@@ -407,7 +421,7 @@ app.get('/api/performance', async (req, res) => {
       installs,
       purchases
     FROM \`byte-data-management.Data_Cleanup.${tableName}\`
-    WHERE day >= '2026-01-01'
+    WHERE day >= '2025-01-01'
     ORDER BY day ASC
   `;
 
@@ -450,12 +464,16 @@ app.get('/api/performance', async (req, res) => {
       const impressions = dailyRows.reduce((sum, r) => sum + (r.impressions || 0), 0);
       const clicks = dailyRows.reduce((sum, r) => sum + (r.outbound_clicks || 0), 0);
       const lpv = dailyRows.reduce((sum, r) => sum + (r.landing_page_views || 0), 0);
-      const installs = dailyRows.reduce((sum, r) => sum + (r.installs || 0), 0);
       const bookings = dailyRows.reduce((sum, r) => sum + (r.purchases || 0), 0);
       const video_views = dailyRows.reduce((sum, r) => sum + (r.video_views || 0), 0);
       const video_completions = dailyRows.reduce((sum, r) => sum + (r.video_views_p100 || 0), 0);
       const cta_installs = dailyRows.reduce((sum, r) => sum + (r.cta_app_install || 0), 0);
       const cta_bookings = dailyRows.reduce((sum, r) => sum + (r.cta_purchase || 0), 0);
+      
+      let installs = dailyRows.reduce((sum, r) => sum + (r.installs || 0), 0);
+      if (isTiktok) {
+        installs += dailyRows.reduce((sum, r) => sum + (r.skan_app_install || 0), 0);
+      }
       
       let wEndStr = addDays(weekStartStr, 6);
       let dateEndValStr = wEndStr;
@@ -562,6 +580,16 @@ app.get('/api/performance', async (req, res) => {
 
     performanceCache[key].data = finalRows;
     performanceCache[key].timestamp = now;
+
+    // Asynchronously write to static file cache on disk to update it
+    const cacheFilePath = path.join(__dirname, key === 'tiktok' ? 'src/data_tiktok.json' : 'src/data_meta.json');
+    fs.writeFile(cacheFilePath, JSON.stringify(finalRows), (err) => {
+      if (err) {
+        console.error("Error writing static file cache to disk:", err);
+      } else {
+        console.log(`Successfully updated static file cache on disk: ${cacheFilePath}`);
+      }
+    });
 
     return res.status(200).json(finalRows);
   } catch (error) {

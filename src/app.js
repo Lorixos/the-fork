@@ -25,6 +25,7 @@ const state = {
   commentaryEditMode: false,
   pacingTab: "monthly",
   pacingMonth: null,
+  pacingActiveOnly: true,
   currentUser: null,
   authError: null,
   authLoading: false,
@@ -2983,9 +2984,17 @@ function renderPacingView(animateClass = "") {
     const budgetObj = state.campaignBudgets[name] || {};
     const hasConfig = state.campaignBudgets[name] !== undefined;
 
-    const isKeep = isMonthly 
+    let isKeep = isMonthly 
       ? (cData.monthlySpend > 0 || hasConfig)
       : (cData.totalSpend > 0 || hasConfig);
+
+    if (state.pacingActiveOnly) {
+      if (isMonthly) {
+        isKeep = cData.monthlySpend > 0;
+      } else {
+        isKeep = cData.totalSpend > 0;
+      }
+    }
 
     if (isKeep) {
       activeCampaigns.push({
@@ -3334,13 +3343,21 @@ function renderPacingView(animateClass = "") {
 
   return `
     <div class="pacing-tab-container${animateClass}">
-      <div class="pacing-subtabs-row" style="margin-bottom: 16px; display: flex; justify-content: flex-start;">
+      <div class="pacing-subtabs-row" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div class="pacing-view-toggle-wrap">
           <div class="pacing-view-toggle">
             <div class="pacing-active-indicator" ${indicatorStyle}></div>
             ${btnMonthlyHtml}
             ${btnLifetimeHtml}
           </div>
+        </div>
+        <div class="pacing-active-only-wrap" style="display: flex; align-items: center;">
+          <button type="button" data-action="toggle-pacing-active-only" style="background: transparent; border: none; padding: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+            <div class="pacing-custom-switch" style="width: 36px; height: 20px; background: ${state.pacingActiveOnly ? "#028a4f" : "rgba(3, 47, 40, 0.15)"}; border-radius: 20px; position: relative; transition: background 0.25s;">
+              <div class="pacing-switch-handle" style="width: 14px; height: 14px; background: #ffffff; border-radius: 50%; position: absolute; top: 3px; left: ${state.pacingActiveOnly ? "19px" : "3px"}; transition: left 0.25s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);"></div>
+            </div>
+            <span style="font-size: 0.82rem; font-weight: 700; color: rgba(20, 32, 28, 0.75);">Active Only</span>
+          </button>
         </div>
       </div>
       <div class="pacing-header-row">
@@ -4339,6 +4356,12 @@ app.addEventListener("click", (event) => {
   if (control.dataset.action === "pacing-tab") {
     state.pacingTab = control.dataset.tab;
     state.tabSwitched = true;
+    render();
+    return;
+  }
+
+  if (control.dataset.action === "toggle-pacing-active-only") {
+    state.pacingActiveOnly = !state.pacingActiveOnly;
     render();
     return;
   }

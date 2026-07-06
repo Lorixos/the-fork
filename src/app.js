@@ -452,19 +452,22 @@ function optionsForFilter(filterId) {
 }
 
 function dateBoundsForMarket() {
-  const rows = state.data.rows;
+  const rows = state.data.rows || [];
   const starts = rows.map((row) => row.dateStart).filter(Boolean).sort();
   const ends = rows.map((row) => row.dateEnd).filter(Boolean).sort();
   
-  const absoluteMin = "2026-01-01";
+  const absoluteMin = "2025-01-01";
   let minVal = starts[0] || state.dateStart || absoluteMin;
-  if (absoluteMin < minVal) {
+  if (minVal < absoluteMin) {
     minVal = absoluteMin;
   }
   
+  const absoluteMax = new Date().toISOString().split('T')[0];
+  const maxVal = ends[ends.length - 1] || state.dateEnd || absoluteMax;
+  
   return {
     min: minVal,
-    max: ends[ends.length - 1] || state.dateEnd,
+    max: maxVal,
   };
 }
 
@@ -1167,7 +1170,8 @@ function applyPresetImmediately(start, end) {
 }
 
 function getCalendarPresets(bounds) {
-  const refDate = new Date(bounds.max + "T00:00:00");
+  const maxDateStr = (bounds && bounds.max) ? bounds.max : new Date().toISOString().split('T')[0];
+  const refDate = new Date(maxDateStr + "T00:00:00");
   
   const dayOfWeek = refDate.getDay(); // 0 is Sunday, 1 is Monday, ...
   let lastWeekEnd, lastWeekStart;

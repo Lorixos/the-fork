@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const { BigQuery } = require('@google-cloud/bigquery');
@@ -25,6 +26,7 @@ if (process.env.NODE_ENV !== 'production' && !process.env.GOOGLE_APPLICATION_CRE
 const app = express();
 const PORT = process.env.PORT || process.argv[2] || 8080;
 
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 
@@ -494,7 +496,7 @@ app.get('/api/performance', async (req, res) => {
         }
       });
 
-      weeklyData[groupKey] = {
+      const item = {
         date_start: weekStartStr,
         date_end: dateEndValStr,
         days_present: getDaysBetween(weekStartStr, dateEndValStr),
@@ -504,9 +506,6 @@ app.get('/api/performance', async (req, res) => {
         campaign: cmp,
         campaign_name: campaignName,
         creative: adName,
-        creative_image_url: dailyRows[0].creative_image_url || "",
-        creative_thumbnail_url: dailyRows[0].creative_thumbnail_url || "",
-        creative_link: dailyRows[0].creative_link || "",
         spend,
         impressions,
         link_clicks: clicks,
@@ -520,6 +519,12 @@ app.get('/api/performance', async (req, res) => {
         cost_timeline,
         impressions_timeline
       };
+
+      if (dailyRows[0].creative_image_url) item.creative_image_url = dailyRows[0].creative_image_url;
+      if (dailyRows[0].creative_thumbnail_url) item.creative_thumbnail_url = dailyRows[0].creative_thumbnail_url;
+      if (dailyRows[0].creative_link) item.creative_link = dailyRows[0].creative_link;
+
+      weeklyData[groupKey] = item;
     });
 
     const finalRows = [];

@@ -3751,29 +3751,82 @@ function renderScorecard() {
   `;
 }
 
-function renderDashboardSkeleton() {
-  return `
-    <header class="topbar is-loading-pulse" style="margin-bottom: 24px; pointer-events: none;">
-      <section class="header-panel" style="border-radius: 20px; display: flex; flex-direction: column; gap: 8px;">
-        <div style="width: 140px; height: 32px; background: rgba(255,255,255,0.08); border-radius: 8px;"></div>
-        <div style="width: 260px; height: 20px; background: rgba(255,255,255,0.06); border-radius: 4px;"></div>
-      </section>
-    </header>
-    <div class="scorecard is-loading-pulse" style="height: 340px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px; margin-bottom: 24px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; pointer-events: none;">
-      <div style="width: 200px; height: 24px; background: rgba(255,255,255,0.06); border-radius: 6px;"></div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; flex: 1;">
-        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
-        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
-        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
-        <div style="background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.04);"></div>
+let loadingStep = 0;
+let loadingStepTimeouts = [];
+
+function startLoadingStepsAnimation() {
+  loadingStepTimeouts.forEach(clearTimeout);
+  loadingStepTimeouts = [];
+  loadingStep = 0;
+
+  const steps = [
+    { step: 1, delay: 1000 },
+    { step: 2, delay: 2200 },
+    { step: 3, delay: 3500 }
+  ];
+
+  steps.forEach(({ step, delay }) => {
+    const t = setTimeout(() => {
+      if (state.initialLoading) {
+        loadingStep = step;
+        render();
+      }
+    }, delay);
+    loadingStepTimeouts.push(t);
+  });
+}
+
+function renderLoadingSurface() {
+  const stepsList = [
+    { id: 0, label: 'Establish secure BigQuery connection' },
+    { id: 1, label: 'Query campaign performance tables' },
+    { id: 2, label: 'Aggregate paid and organic metrics' },
+    { id: 3, label: 'Compute engagement visualizations' }
+  ];
+
+  const stepsHtml = stepsList.map(step => {
+    const isCompleted = loadingStep > step.id;
+    const isActive = loadingStep === step.id;
+    let statusClass = "loading-step-pending";
+    let iconHtml = '<div class="step-pending-dot"></div>';
+
+    if (isCompleted) {
+      statusClass = "loading-step-completed";
+      iconHtml = `
+        <svg class="step-check-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; display: block;">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      `;
+    } else if (isActive) {
+      statusClass = "loading-step-active";
+      iconHtml = '<div class="step-pulse-dot"></div>';
+    }
+
+    return `
+      <div class="loading-step-item ${statusClass}">
+        <div class="loading-step-icon">${iconHtml}</div>
+        <span class="loading-step-label">${step.label}</span>
       </div>
-    </div>
-    <div class="performance-panel is-loading-pulse" style="height: 400px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 28px; padding: 28px; box-sizing: border-box; pointer-events: none;">
-      <div style="width: 150px; height: 20px; background: rgba(255,255,255,0.06); border-radius: 6px; margin-bottom: 20px;"></div>
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        <div style="height: 48px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px;"></div>
-        <div style="height: 48px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px;"></div>
-        <div style="height: 48px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 10px;"></div>
+    `;
+  }).join("");
+
+  return `
+    <div class="loading-surface">
+      <div class="loading-panel dashboard-loading-panel" role="status" aria-live="polite">
+        <div class="loading-brand-lockup">
+          <div class="loading-brand-mark">
+            <img class="loading-fork-logo" src="assets/logos/thefork-seeklogo.svg" alt="TheFork" />
+          </div>
+        </div>
+        <div class="loading-handoff-state">
+          <span class="loading-handoff-eyebrow">Session ready</span>
+          <h2>Loading dashboard</h2>
+          <p>Preparing the latest media performance data.</p>
+          <div class="loading-progress" aria-hidden="true"></div>
+        </div>
+        <div class="loading-steps-list">
+          ${stepsHtml}
+        </div>
       </div>
     </div>
   `;
@@ -3791,7 +3844,7 @@ function render() {
     app.innerHTML = renderLoginScreen();
   } else if (state.initialLoading) {
     app.className = "dashboard-shell loading-shell";
-    app.innerHTML = renderDashboardSkeleton();
+    app.innerHTML = renderLoadingSurface();
   } else {
     // Save scroll positions
     const scrollContainers = document.querySelectorAll(".table-scroll");
@@ -4293,14 +4346,11 @@ let liveLoaderPromise = null;
 async function connectData() {
   await loadBudgets();
   state.initialLoading = true;
+  startLoadingStepsAnimation();
   render();
 
-  let liveLoaded = false;
-  let timeoutTriggered = false;
-
-  // Start the background live loader immediately
+  // Start the background live loader immediately and wait for it
   liveLoaderPromise = loadLivePerformance().then((success) => {
-    liveLoaded = true;
     if (success) {
       state.initialLoading = false;
       render();
@@ -4308,15 +4358,6 @@ async function connectData() {
       fallbackToStaticCache();
     }
   });
-
-  // Race: if live load doesn't finish in 1.2 seconds, fallback to static cache
-  setTimeout(() => {
-    timeoutTriggered = true;
-    if (!liveLoaded) {
-      console.log("Live BigQuery load is taking longer than 1.2s. Falling back to cached data...");
-      fallbackToStaticCache();
-    }
-  }, 1200);
 }
 
 async function fallbackToStaticCache() {

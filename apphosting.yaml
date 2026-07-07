@@ -4,7 +4,7 @@ runConfig:
   maxInstances: 10
   concurrency: 80
   cpu: 1
-  memoryMiB: 512
+  memoryMiB: 1024
 
 # Custom build and run commands for plain Node.js Express server
 env:

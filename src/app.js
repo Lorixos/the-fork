@@ -518,7 +518,7 @@ function aggregateRows(rows) {
       prevStartStr = shiftYear(state.dateStart, -1);
       prevEndStr = shiftYear(state.dateEnd, -1);
     } else {
-      const diffDays = getDaysBetween(state.dateStart, state.dateEnd) + 1;
+      const diffDays = getDaysBetween(state.dateStart, state.dateEnd);
       prevStartStr = addDays(state.dateStart, -diffDays);
       prevEndStr = addDays(state.dateEnd, -diffDays);
     }
@@ -1483,7 +1483,7 @@ function renderMetric(metric, index) {
   const numberAnimClass = state.tabSwitched ? " animate-number" : "";
   let comparisonLabel = "vs previous week";
   if (state.dateStart && state.dateEnd) {
-    const diffDays = getDaysBetween(state.dateStart, state.dateEnd) + 1;
+    const diffDays = getDaysBetween(state.dateStart, state.dateEnd);
     if (state.comparisonMode === "yoy") {
       comparisonLabel = "vs same period last year";
     } else if (diffDays > 7) {

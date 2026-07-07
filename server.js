@@ -4,6 +4,7 @@ const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const { BigQuery } = require('@google-cloud/bigquery');
+const { Storage } = require('@google-cloud/storage');
 
 // Load local .env variables if file exists
 if (fs.existsSync(path.join(__dirname, '.env'))) {
@@ -39,6 +40,8 @@ const TABLE_NAME = `${PROJECT_ID}.${DATASET_ID}.the_fork_commentaries`;
 const BUDGETS_TABLE_NAME = `${PROJECT_ID}.${DATASET_ID}.the_fork_campaign_budgets`;
 
 const bqClient = new BigQuery({ projectId: PROJECT_ID });
+const storage = new Storage({ projectId: PROJECT_ID });
+const BUCKET_NAME = "thefork-dashboard-cache";
 
 // Normalization Helpers
 function normalizeMarket(m) {
@@ -369,20 +372,80 @@ const performanceCache = {
 };
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
-// 6. GET /api/performance
-app.get('/api/performance', async (req, res) => {
-  const { platform = 'meta' } = req.query;
-  const key = platform === 'tiktok' ? 'tiktok' : 'meta';
+// GCS helper functions
+async function readFromGCS(fileName) {
+  try {
+    const bucket = storage.bucket(BUCKET_NAME);
+    const file = bucket.file(fileName);
+    const [exists] = await file.exists();
+    if (!exists) return null;
+    
+    const [content] = await file.download();
+    return JSON.parse(content.toString('utf8'));
+  } catch (err) {
+    console.error(`Error reading ${fileName} from GCS:`, err);
+    return null;
+  }
+}
+
+async function writeToGCS(fileName, data) {
+  try {
+    const bucket = storage.bucket(BUCKET_NAME);
+    const file = bucket.file(fileName);
+    await file.save(JSON.stringify(data), {
+      contentType: 'application/json',
+      gzip: true,
+      metadata: {
+        cacheControl: 'no-cache',
+      }
+    });
+    console.log(`Successfully saved ${fileName} to GCS.`);
+    return true;
+  } catch (err) {
+    console.error(`Error writing ${fileName} to GCS:`, err);
+    return false;
+  }
+}
+
+async function syncCacheFromBigQuery(platform) {
+  const isTiktok = (platform === 'tiktok');
+  const key = isTiktok ? 'tiktok' : 'meta';
+  const tableName = isTiktok ? "thefork_tiktok_ads_modeled" : "the_fork_fb_ads_modeled";
   
-  const now = Date.now();
-  if (performanceCache[key].data && (now - performanceCache[key].timestamp < CACHE_TTL)) {
-    console.log(`Serving cached performance data for ${key}`);
-    return res.status(200).json(performanceCache[key].data);
+  // 1. Get existing cache data
+  let existingData = performanceCache[key].data;
+  if (!existingData) {
+    existingData = await readFromGCS(`data_${key}.json`);
+  }
+  if (!existingData) {
+    try {
+      existingData = JSON.parse(fs.readFileSync(path.join(__dirname, `src/data_${key}.json`), 'utf8'));
+    } catch (err) {
+      existingData = [];
+    }
   }
 
-  const isTiktok = (platform === 'tiktok');
-  const tableName = isTiktok ? "thefork_tiktok_ads_modeled" : "the_fork_fb_ads_modeled";
+  // 2. Find latest week date start in existing cache
+  let queryStartDate = '2025-01-01';
+  if (existingData && existingData.length > 0) {
+    const dates = existingData.map(r => r.date_start).filter(Boolean).sort();
+    if (dates.length > 0) {
+      const latestDateStr = dates[dates.length - 1];
+      const latestDate = new Date(`${latestDateStr}T00:00:00`);
+      latestDate.setDate(latestDate.getDate() - 14); // Subtract 14 days lookback
+      
+      const y = latestDate.getFullYear();
+      const m = String(latestDate.getMonth() + 1).padStart(2, '0');
+      const d = String(latestDate.getDate()).padStart(2, '0');
+      queryStartDate = `${y}-${m}-${d}`;
+    }
+  }
+  
+  console.log(`[Cache Sync] Syncing ${platform} with BigQuery from lookback date: ${queryStartDate}...`);
 
+  // 3. Query BigQuery for incremental data
+  const bigquery = new BigQuery({ projectId: PROJECT_ID });
+  
   const videoViewsP100Select = isTiktok ? "0 AS video_views_p100" : "video_views_p100";
   const ctaSelect = isTiktok ? "cta_app_install, cta_purchase" : "0 AS cta_app_install, 0 AS cta_purchase";
   const iosInstallsSelect = isTiktok ? "skan_app_install" : "0 AS skan_app_install";
@@ -423,186 +486,289 @@ app.get('/api/performance', async (req, res) => {
       installs,
       purchases
     FROM \`byte-data-management.Data_Cleanup.${tableName}\`
-    WHERE day >= '2025-01-01'
+    WHERE day >= '${queryStartDate}'
     ORDER BY day ASC
   `;
 
-  try {
-    const [rows] = await bqClient.query({ query });
+  const [rows] = await bigquery.query({
+    query,
+    location: 'EU'
+  });
 
-    let maxDayStr = null;
-    if (rows.length > 0) {
-      maxDayStr = rows.reduce((max, row) => {
-        const dStr = row.day.value || row.day;
-        return dStr > max ? dStr : max;
-      }, "0000-00-00");
+  console.log(`[Cache Sync] BigQuery returned ${rows.length} raw daily rows for ${platform}.`);
+
+  if (!rows || rows.length === 0) {
+    console.log(`[Cache Sync] No new data found since ${queryStartDate} for ${platform}.`);
+    return existingData;
+  }
+
+  let maxDayStr = rows.reduce((max, row) => {
+    const dStr = row.day.value || row.day;
+    return dStr > max ? dStr : max;
+  }, "0000-00-00");
+
+  // Group daily records
+  const groups = {};
+  rows.forEach(row => {
+    const dStr = row.day.value || row.day;
+    const weekStartStr = getWeekStart(dStr);
+    
+    const m = normalizeMarket(row.Market);
+    const obj = normalizeObjective(row.Campaign_3);
+    const tgt = normalizeTarget(row.Campaign_1);
+    const cmp = normalizeCampaign(row.Campaign_3);
+    const campaignName = row.campaign_name || "";
+    const adName = row.ad_name || "";
+    
+    const groupKey = `${weekStartStr}|${m}|${obj}|${tgt}|${cmp}|${campaignName}|${adName}`;
+    if (!groups[groupKey]) {
+      groups[groupKey] = [];
+    }
+    groups[groupKey].push(row);
+  });
+
+  const newWeeklyRowsMap = {};
+  Object.entries(groups).forEach(([groupKey, dailyRows]) => {
+    const [weekStartStr, m, obj, tgt, cmp, campaignName, adName] = groupKey.split('|');
+    
+    const spend = dailyRows.reduce((sum, r) => sum + (r.costs || 0), 0);
+    const impressions = dailyRows.reduce((sum, r) => sum + (r.impressions || 0), 0);
+    const clicks = dailyRows.reduce((sum, r) => sum + (r.outbound_clicks || 0), 0);
+    const lpv = dailyRows.reduce((sum, r) => sum + (r.landing_page_views || 0), 0);
+    const bookings = dailyRows.reduce((sum, r) => sum + (r.purchases || 0), 0);
+    const video_views = dailyRows.reduce((sum, r) => sum + (r.video_views || 0), 0);
+    const video_completions = dailyRows.reduce((sum, r) => sum + (r.video_views_p100 || 0), 0);
+    const cta_installs = dailyRows.reduce((sum, r) => sum + (r.cta_app_install || 0), 0);
+    const cta_bookings = dailyRows.reduce((sum, r) => sum + (r.cta_purchase || 0), 0);
+    
+    let installs = dailyRows.reduce((sum, r) => sum + (r.installs || 0), 0);
+    if (isTiktok) {
+      installs += dailyRows.reduce((sum, r) => sum + (r.skan_app_install || 0), 0);
+    }
+    
+    let wEndStr = addDays(weekStartStr, 6);
+    let dateEndValStr = wEndStr;
+    if (maxDayStr && wEndStr > maxDayStr) {
+      dateEndValStr = maxDayStr;
     }
 
-    // Group daily records
-    const groups = {};
-    rows.forEach(row => {
-      const dStr = row.day.value || row.day;
-      const weekStartStr = getWeekStart(dStr);
-      
-      const m = normalizeMarket(row.Market);
-      const obj = normalizeObjective(row.Campaign_3);
-      const tgt = normalizeTarget(row.Campaign_1);
-      const cmp = normalizeCampaign(row.Campaign_3);
-      const campaignName = row.campaign_name || "";
-      const adName = row.ad_name || "";
-      
-      const groupKey = `${weekStartStr}|${m}|${obj}|${tgt}|${cmp}|${campaignName}|${adName}`;
-      if (!groups[groupKey]) {
-        groups[groupKey] = [];
-      }
-      groups[groupKey].push(row);
-    });
-
-    const weeklyData = {};
-    Object.entries(groups).forEach(([groupKey, dailyRows]) => {
-      const [weekStartStr, m, obj, tgt, cmp, campaignName, adName] = groupKey.split('|');
-      
-      const spend = dailyRows.reduce((sum, r) => sum + (r.costs || 0), 0);
-      const impressions = dailyRows.reduce((sum, r) => sum + (r.impressions || 0), 0);
-      const clicks = dailyRows.reduce((sum, r) => sum + (r.outbound_clicks || 0), 0);
-      const lpv = dailyRows.reduce((sum, r) => sum + (r.landing_page_views || 0), 0);
-      const bookings = dailyRows.reduce((sum, r) => sum + (r.purchases || 0), 0);
-      const video_views = dailyRows.reduce((sum, r) => sum + (r.video_views || 0), 0);
-      const video_completions = dailyRows.reduce((sum, r) => sum + (r.video_views_p100 || 0), 0);
-      const cta_installs = dailyRows.reduce((sum, r) => sum + (r.cta_app_install || 0), 0);
-      const cta_bookings = dailyRows.reduce((sum, r) => sum + (r.cta_purchase || 0), 0);
-      
-      let installs = dailyRows.reduce((sum, r) => sum + (r.installs || 0), 0);
-      if (isTiktok) {
-        installs += dailyRows.reduce((sum, r) => sum + (r.skan_app_install || 0), 0);
-      }
-      
-      let wEndStr = addDays(weekStartStr, 6);
-      let dateEndValStr = wEndStr;
-      if (maxDayStr && wEndStr > maxDayStr) {
-        dateEndValStr = maxDayStr;
-      }
-
-      const cost_timeline = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-      const impressions_timeline = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-      const wStartObj = new Date(weekStartStr + 'T00:00:00');
-      dailyRows.forEach(r => {
-        const rDayStr = r.day.value || r.day;
-        const rDayObj = new Date(rDayStr + 'T00:00:00');
-        const dayIdx = Math.round((rDayObj - wStartObj) / (1000 * 60 * 60 * 24));
-        if (dayIdx >= 0 && dayIdx < 7) {
-          cost_timeline[dayIdx] += parseFloat(r.costs || 0);
-          impressions_timeline[dayIdx] += parseFloat(r.impressions || 0);
-        }
-      });
-
-      const item = {
-        date_start: weekStartStr,
-        date_end: dateEndValStr,
-        days_present: getDaysBetween(weekStartStr, dateEndValStr),
-        market: m,
-        objective: obj,
-        target: tgt,
-        campaign: cmp,
-        campaign_name: campaignName,
-        creative: adName,
-        spend,
-        impressions,
-        link_clicks: clicks,
-        landing_page_views: lpv,
-        installs,
-        bookings,
-        video_views,
-        video_completions,
-        cta_installs,
-        cta_bookings,
-        cost_timeline,
-        impressions_timeline
-      };
-
-      if (dailyRows[0].creative_image_url) item.creative_image_url = dailyRows[0].creative_image_url;
-      if (dailyRows[0].creative_thumbnail_url) item.creative_thumbnail_url = dailyRows[0].creative_thumbnail_url;
-      if (dailyRows[0].creative_link) item.creative_link = dailyRows[0].creative_link;
-
-      weeklyData[groupKey] = item;
-    });
-
-    const finalRows = [];
-    Object.entries(weeklyData).forEach(([groupKey, current]) => {
-      const [weekStartStr, m, obj, tgt, cmp, campaignName, adName] = groupKey.split('|');
-      
-      const parts = weekStartStr.split('-');
-      const wStartObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      wStartObj.setDate(wStartObj.getDate() - 7);
-      
-      const prevY = wStartObj.getFullYear();
-      const prevM = String(wStartObj.getMonth() + 1).padStart(2, '0');
-      const prevD = String(wStartObj.getDate()).padStart(2, '0');
-      const prevWeekStartStr = `${prevY}-${prevM}-${prevD}`;
-      
-      const prevKey = `${prevWeekStartStr}|${m}|${obj}|${tgt}|${cmp}|${campaignName}|${adName}`;
-      
-      const daysPresent = current.days_present || 7;
-      const scale = daysPresent / 7.0;
-      
-      if (weeklyData[prevKey]) {
-        const prev = weeklyData[prevKey];
-        current["prev_spend"] = prev["spend"] * scale;
-        current["prev_impressions"] = Math.round(prev["impressions"] * scale);
-        current["prev_link_clicks"] = Math.round(prev["link_clicks"] * scale);
-        current["prev_landing_page_views"] = Math.round(prev["landing_page_views"] * scale);
-        current["prev_installs"] = Math.round(prev["installs"] * scale);
-        current["prev_bookings"] = Math.round(prev["bookings"] * scale);
-        current["prev_video_views"] = Math.round((prev["video_views"] || 0) * scale);
-        current["prev_video_completions"] = Math.round((prev["video_completions"] || 0) * scale);
-        current["prev_cta_installs"] = Math.round((prev["cta_installs"] || 0) * scale);
-        current["prev_cta_bookings"] = Math.round((prev["cta_bookings"] || 0) * scale);
-      } else {
-        current["prev_spend"] = 0.0;
-        current["prev_impressions"] = 0;
-        current["prev_link_clicks"] = 0;
-        current["prev_landing_page_views"] = 0;
-        current["prev_installs"] = 0;
-        current["prev_bookings"] = 0;
-        current["prev_video_views"] = 0;
-        current["prev_video_completions"] = 0;
-        current["prev_cta_installs"] = 0;
-        current["prev_cta_bookings"] = 0;
-      }
-      
-      finalRows.push(current);
-    });
-
-    finalRows.sort((a, b) => {
-      if (a.date_start !== b.date_start) {
-        return b.date_start.localeCompare(a.date_start); // descending start date
-      }
-      if (a.market !== b.market) {
-        return a.market.localeCompare(b.market); // ascending market
-      }
-      return a.campaign.localeCompare(b.campaign); // ascending campaign
-    });
-
-    performanceCache[key].data = finalRows;
-    performanceCache[key].timestamp = now;
-
-    // Asynchronously write to static file cache on disk to update it
-    const cacheFilePath = path.join(__dirname, key === 'tiktok' ? 'src/data_tiktok.json' : 'src/data_meta.json');
-    fs.writeFile(cacheFilePath, JSON.stringify(finalRows), (err) => {
-      if (err) {
-        console.error("Error writing static file cache to disk:", err);
-      } else {
-        console.log(`Successfully updated static file cache on disk: ${cacheFilePath}`);
+    const cost_timeline = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    const impressions_timeline = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    const wStartObj = new Date(weekStartStr + 'T00:00:00');
+    dailyRows.forEach(r => {
+      const rDayStr = r.day.value || r.day;
+      const rDayObj = new Date(rDayStr + 'T00:00:00');
+      const dayIdx = Math.round((rDayObj - wStartObj) / (1000 * 60 * 60 * 24));
+      if (dayIdx >= 0 && dayIdx < 7) {
+        cost_timeline[dayIdx] += parseFloat(r.costs || 0);
+        impressions_timeline[dayIdx] += parseFloat(r.impressions || 0);
       }
     });
 
-    return res.status(200).json(finalRows);
-  } catch (error) {
-    console.error("Error fetching live performance:", error);
-    return res.status(500).json({ error: `Database error: ${error.message}` });
+    const item = {
+      date_start: weekStartStr,
+      date_end: dateEndValStr,
+      days_present: getDaysBetween(weekStartStr, dateEndValStr),
+      market: m,
+      objective: obj,
+      target: tgt,
+      campaign: cmp,
+      campaign_name: campaignName,
+      creative: adName,
+      spend,
+      impressions,
+      link_clicks: clicks,
+      landing_page_views: lpv,
+      installs,
+      bookings,
+      video_views,
+      video_completions,
+      cta_installs,
+      cta_bookings,
+      cost_timeline,
+      impressions_timeline
+    };
+
+    if (dailyRows[0].creative_image_url) item.creative_image_url = dailyRows[0].creative_image_url;
+    if (dailyRows[0].creative_thumbnail_url) item.creative_thumbnail_url = dailyRows[0].creative_thumbnail_url;
+    if (dailyRows[0].creative_link) item.creative_link = dailyRows[0].creative_link;
+
+    newWeeklyRowsMap[groupKey] = item;
+  });
+
+  // 4. Merge new weekly rows into existing cache rows without duplicates
+  const mergedMap = new Map();
+  // Populate from existing cache
+  existingData.forEach(row => {
+    const key = `${row.date_start}|${row.market}|${row.objective}|${row.target}|${row.campaign}|${row.campaign_name}|${row.creative}`;
+    mergedMap.set(key, row);
+  });
+  // Overwrite or append from new weekly rows
+  Object.entries(newWeeklyRowsMap).forEach(([key, newRow]) => {
+    mergedMap.set(key, newRow);
+  });
+
+  const mergedRows = Array.from(mergedMap.values());
+
+  // Re-calculate all prev comparisons for the merged list
+  const lookupMap = {};
+  mergedRows.forEach(row => {
+    const key = `${row.date_start}|${row.market}|${row.objective}|${row.target}|${row.campaign}|${row.campaign_name}|${row.creative}`;
+    lookupMap[key] = row;
+  });
+
+  mergedRows.forEach(current => {
+    const parts = current.date_start.split('-');
+    const wStartObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    wStartObj.setDate(wStartObj.getDate() - 7);
+    
+    const prevY = wStartObj.getFullYear();
+    const prevM = String(wStartObj.getMonth() + 1).padStart(2, '0');
+    const prevD = String(wStartObj.getDate()).padStart(2, '0');
+    const prevWeekStartStr = `${prevY}-${prevM}-${prevD}`;
+    
+    const prevKey = `${prevWeekStartStr}|${current.market}|${current.objective}|${current.target}|${current.campaign}|${current.campaign_name}|${current.creative}`;
+    
+    const daysPresent = current.days_present || 7;
+    const scale = daysPresent / 7.0;
+    
+    if (lookupMap[prevKey]) {
+      const prev = lookupMap[prevKey];
+      current["prev_spend"] = prev["spend"] * scale;
+      current["prev_impressions"] = Math.round(prev["impressions"] * scale);
+      current["prev_link_clicks"] = Math.round(prev["link_clicks"] * scale);
+      current["prev_landing_page_views"] = Math.round(prev["landing_page_views"] * scale);
+      current["prev_installs"] = Math.round(prev["installs"] * scale);
+      current["prev_bookings"] = Math.round(prev["bookings"] * scale);
+      current["prev_video_views"] = Math.round((prev["video_views"] || 0) * scale);
+      current["prev_video_completions"] = Math.round((prev["video_completions"] || 0) * scale);
+      current["prev_cta_installs"] = Math.round((prev["cta_installs"] || 0) * scale);
+      current["prev_cta_bookings"] = Math.round((prev["cta_bookings"] || 0) * scale);
+    } else {
+      current["prev_spend"] = 0.0;
+      current["prev_impressions"] = 0;
+      current["prev_link_clicks"] = 0;
+      current["prev_landing_page_views"] = 0;
+      current["prev_installs"] = 0;
+      current["prev_bookings"] = 0;
+      current["prev_video_views"] = 0;
+      current["prev_video_completions"] = 0;
+      current["prev_cta_installs"] = 0;
+      current["prev_cta_bookings"] = 0;
+    }
+  });
+
+  // Sort final merged list descending date_start
+  mergedRows.sort((a, b) => {
+    if (a.date_start !== b.date_start) {
+      return b.date_start.localeCompare(a.date_start);
+    }
+    if (a.market !== b.market) {
+      return a.market.localeCompare(b.market);
+    }
+    return a.campaign.localeCompare(b.campaign);
+  });
+
+  // 5. Save back to GCS and update local state
+  await writeToGCS(`data_${key}.json`, mergedRows);
+  performanceCache[key].data = mergedRows;
+  performanceCache[key].timestamp = Date.now();
+
+  console.log(`[Cache Sync] Successfully completed sync for ${platform}. Final count: ${mergedRows.length} rows.`);
+  return mergedRows;
+}
+
+async function initializeCache() {
+  console.log("Initializing dashboard cache from GCS...");
+  const metaData = await readFromGCS('data_meta.json');
+  if (metaData) {
+    performanceCache.meta.data = metaData;
+    performanceCache.meta.timestamp = Date.now();
+    console.log("Loaded Meta cache from GCS successfully.");
+  } else {
+    try {
+      const localMeta = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_meta.json'), 'utf8'));
+      performanceCache.meta.data = localMeta;
+      performanceCache.meta.timestamp = Date.now();
+      console.log("Fell back to local src/data_meta.json.");
+    } catch (err) {
+      console.error("Local Meta file not found:", err);
+    }
+  }
+
+  const tiktokData = await readFromGCS('data_tiktok.json');
+  if (tiktokData) {
+    performanceCache.tiktok.data = tiktokData;
+    performanceCache.tiktok.timestamp = Date.now();
+    console.log("Loaded TikTok cache from GCS successfully.");
+  } else {
+    try {
+      const localTiktok = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_tiktok.json'), 'utf8'));
+      performanceCache.tiktok.data = localTiktok;
+      performanceCache.tiktok.timestamp = Date.now();
+      console.log("Fell back to local src/data_tiktok.json.");
+    } catch (err) {
+      console.error("Local TikTok file not found:", err);
+    }
+  }
+}
+
+// 6. GET /api/performance
+app.get('/api/performance', async (req, res) => {
+  const { platform = 'meta' } = req.query;
+  if (platform !== 'meta' && platform !== 'tiktok') {
+    return res.status(400).json({ error: "Missing or invalid platform parameter. Use 'meta' or 'tiktok'." });
+  }
+
+  const key = platform === 'tiktok' ? 'tiktok' : 'meta';
+  
+  if (performanceCache[key].data) {
+    console.log(`Serving cached performance data for ${key}`);
+    return res.status(200).json(performanceCache[key].data);
+  }
+
+  // Fallback to GCS direct read
+  const gcsData = await readFromGCS(`data_${key}.json`);
+  if (gcsData) {
+    performanceCache[key].data = gcsData;
+    performanceCache[key].timestamp = Date.now();
+    return res.status(200).json(gcsData);
+  }
+
+  // Fallback to local files
+  try {
+    const localData = JSON.parse(fs.readFileSync(path.join(__dirname, `src/data_${key}.json`), 'utf8'));
+    performanceCache[key].data = localData;
+    performanceCache[key].timestamp = Date.now();
+    return res.status(200).json(localData);
+  } catch (err) {
+    console.error(`Error loading fallback for ${key}:`, err);
+    return res.status(500).json({ error: `No cached data available for ${key}` });
   }
 });
 
-app.listen(PORT, () => {
+// 7. GET /api/cron-update-cache
+app.get('/api/cron-update-cache', async (req, res) => {
+  const secret = req.query.secret;
+  const expectedSecret = process.env.CRON_SECRET || "thefork-cron-secret-2026";
+  
+  if (secret !== expectedSecret) {
+    return res.status(403).json({ error: "Access denied: invalid cron secret token." });
+  }
+
+  try {
+    console.log("[Cron] Starting background cache update from BigQuery...");
+    await syncCacheFromBigQuery('meta');
+    await syncCacheFromBigQuery('tiktok');
+    console.log("[Cron] Background cache update completed successfully.");
+    return res.status(200).json({ success: true, message: "Cache sync completed successfully." });
+  } catch (err) {
+    console.error("[Cron] Cache sync failed:", err);
+    return res.status(500).json({ error: `Sync failed: ${err.message}` });
+  }
+});
+
+app.listen(PORT, async () => {
   console.log(`Node Server running on port ${PORT}...`);
+  await initializeCache();
 });

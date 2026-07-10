@@ -5047,10 +5047,15 @@ button:focus-visible {
   box-shadow: 0 16px 36px rgba(3, 47, 40, 0.18) !important;
 }
 
-/* Elevate stacking context of cells with open date picker popovers */
-.performance-table td:has(.pacing-calendar-popover) {
+/* Elevate stacking context of cells and rows with open date picker popovers */
+.performance-table td:has(.pacing-calendar-popover),
+.pacing-active-cell {
   position: relative;
-  z-index: 40 !important;
+  z-index: 1010 !important;
+}
+.pacing-active-row {
+  position: relative;
+  z-index: 1010 !important;
 }
 
 /* Premium Switch & Tab Enhancements */

@@ -3239,15 +3239,16 @@ function renderPacingView(animateClass = "") {
         </tr>
       `;
     } else {
+      const isActive = state.activePacingCampaign === r.name;
       return `
-        <tr>
+        <tr class="${isActive ? 'pacing-active-row' : ''}">
           <td class="row-number">${i + 1}.</td>
           <td class="is-left is-wide" style="font-weight: 700; color: #101815;">
             ${r.name}
             <span class="pacing-obj-badge">${r.objective}</span>
           </td>
-          <td class="is-center">
-            <div class="pacing-dates-container" style="position: relative;">
+          <td class="is-center ${isActive ? 'pacing-active-cell' : ''}">
+            <div class="pacing-dates-container" style="position: relative; ${isActive ? 'z-index: 1010;' : ''}">
               <div class="date-input-group" data-campaign="${r.name}" data-field="start">
                 <label>Start</label>
                 <input 

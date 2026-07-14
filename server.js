@@ -683,13 +683,13 @@ async function initializeCache() {
   const metaData = await readFromGCS('data_meta.json');
   if (metaData) {
     performanceCache.meta.data = metaData;
-    performanceCache.meta.timestamp = Date.now();
+    performanceCache.meta.timestamp = Date.now() - (4 * 60 * 60 * 1000); // Mark as stale to trigger revalidation on first hit
     console.log("Loaded Meta cache from GCS successfully.");
   } else {
     try {
       const localMeta = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_meta.json'), 'utf8'));
       performanceCache.meta.data = localMeta;
-      performanceCache.meta.timestamp = Date.now();
+      performanceCache.meta.timestamp = Date.now() - (4 * 60 * 60 * 1000);
       console.log("Fell back to local src/data_meta.json.");
     } catch (err) {
       console.error("Local Meta file not found:", err);
@@ -699,13 +699,13 @@ async function initializeCache() {
   const tiktokData = await readFromGCS('data_tiktok.json');
   if (tiktokData) {
     performanceCache.tiktok.data = tiktokData;
-    performanceCache.tiktok.timestamp = Date.now();
+    performanceCache.tiktok.timestamp = Date.now() - (4 * 60 * 60 * 1000); // Mark as stale to trigger revalidation on first hit
     console.log("Loaded TikTok cache from GCS successfully.");
   } else {
     try {
       const localTiktok = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_tiktok.json'), 'utf8'));
       performanceCache.tiktok.data = localTiktok;
-      performanceCache.tiktok.timestamp = Date.now();
+      performanceCache.tiktok.timestamp = Date.now() - (4 * 60 * 60 * 1000);
       console.log("Fell back to local src/data_tiktok.json.");
     } catch (err) {
       console.error("Local TikTok file not found:", err);
@@ -721,30 +721,54 @@ app.get('/api/performance', async (req, res) => {
   }
 
   const key = platform === 'tiktok' ? 'tiktok' : 'meta';
-  
-  if (performanceCache[key].data) {
-    console.log(`Serving cached performance data for ${key}`);
-    return res.status(200).json(performanceCache[key].data);
+  let dataToServe = performanceCache[key].data;
+  let cacheSource = "memory";
+
+  if (!dataToServe) {
+    // Fallback to GCS direct read
+    dataToServe = await readFromGCS(`data_${key}.json`);
+    if (dataToServe) {
+      performanceCache[key].data = dataToServe;
+      performanceCache[key].timestamp = Date.now() - (4 * 60 * 60 * 1000);
+      cacheSource = "GCS";
+    }
   }
 
-  // Fallback to GCS direct read
-  const gcsData = await readFromGCS(`data_${key}.json`);
-  if (gcsData) {
-    performanceCache[key].data = gcsData;
-    performanceCache[key].timestamp = Date.now();
-    return res.status(200).json(gcsData);
+  if (!dataToServe) {
+    // Fallback to local files
+    try {
+      dataToServe = JSON.parse(fs.readFileSync(path.join(__dirname, `src/data_${key}.json`), 'utf8'));
+      performanceCache[key].data = dataToServe;
+      performanceCache[key].timestamp = Date.now() - (4 * 60 * 60 * 1000);
+      cacheSource = "local-disk";
+    } catch (err) {
+      console.error(`Error loading fallback for ${key}:`, err);
+    }
   }
 
-  // Fallback to local files
-  try {
-    const localData = JSON.parse(fs.readFileSync(path.join(__dirname, `src/data_${key}.json`), 'utf8'));
-    performanceCache[key].data = localData;
-    performanceCache[key].timestamp = Date.now();
-    return res.status(200).json(localData);
-  } catch (err) {
-    console.error(`Error loading fallback for ${key}:`, err);
+  if (!dataToServe) {
     return res.status(500).json({ error: `No cached data available for ${key}` });
   }
+
+  // Stale-While-Revalidate (SWR) Check:
+  // If the cache is older than 4 hours, trigger background sync without blocking the user
+  const age = Date.now() - performanceCache[key].timestamp;
+  const fourHours = 4 * 60 * 60 * 1000;
+  if (age > fourHours) {
+    console.log(`[SWR] Cache for ${key} is stale (age: ${(age / 1000 / 60).toFixed(1)} mins). Triggering background sync...`);
+    
+    // Prevent duplicate concurrent sync runs by resetting the timestamp immediately
+    performanceCache[key].timestamp = Date.now();
+    
+    syncCacheFromBigQuery(platform).catch(err => {
+      console.error(`[SWR] Background sync failed for ${key}:`, err);
+      // Reset timestamp to retry in 10 minutes on failure
+      performanceCache[key].timestamp = Date.now() - (fourHours - 10 * 60 * 1000);
+    });
+  }
+
+  console.log(`Serving cached performance data for ${key} from ${cacheSource}`);
+  return res.status(200).json(dataToServe);
 });
 
 // 7. GET /api/cron-update-cache

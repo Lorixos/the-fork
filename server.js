@@ -683,13 +683,13 @@ async function initializeCache() {
   const metaData = await readFromGCS('data_meta.json');
   if (metaData) {
     performanceCache.meta.data = metaData;
-    performanceCache.meta.timestamp = Date.now() - (4 * 60 * 60 * 1000); // Mark as stale to trigger revalidation on first hit
+    performanceCache.meta.timestamp = 0; // Mark as stale (age = Date.now()) to trigger revalidation on first hit
     console.log("Loaded Meta cache from GCS successfully.");
   } else {
     try {
       const localMeta = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_meta.json'), 'utf8'));
       performanceCache.meta.data = localMeta;
-      performanceCache.meta.timestamp = Date.now() - (4 * 60 * 60 * 1000);
+      performanceCache.meta.timestamp = 0;
       console.log("Fell back to local src/data_meta.json.");
     } catch (err) {
       console.error("Local Meta file not found:", err);
@@ -699,13 +699,13 @@ async function initializeCache() {
   const tiktokData = await readFromGCS('data_tiktok.json');
   if (tiktokData) {
     performanceCache.tiktok.data = tiktokData;
-    performanceCache.tiktok.timestamp = Date.now() - (4 * 60 * 60 * 1000); // Mark as stale to trigger revalidation on first hit
+    performanceCache.tiktok.timestamp = 0; // Mark as stale to trigger revalidation on first hit
     console.log("Loaded TikTok cache from GCS successfully.");
   } else {
     try {
       const localTiktok = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_tiktok.json'), 'utf8'));
       performanceCache.tiktok.data = localTiktok;
-      performanceCache.tiktok.timestamp = Date.now() - (4 * 60 * 60 * 1000);
+      performanceCache.tiktok.timestamp = 0;
       console.log("Fell back to local src/data_tiktok.json.");
     } catch (err) {
       console.error("Local TikTok file not found:", err);
@@ -729,7 +729,7 @@ app.get('/api/performance', async (req, res) => {
     dataToServe = await readFromGCS(`data_${key}.json`);
     if (dataToServe) {
       performanceCache[key].data = dataToServe;
-      performanceCache[key].timestamp = Date.now() - (4 * 60 * 60 * 1000);
+      performanceCache[key].timestamp = 0;
       cacheSource = "GCS";
     }
   }
@@ -739,7 +739,7 @@ app.get('/api/performance', async (req, res) => {
     try {
       dataToServe = JSON.parse(fs.readFileSync(path.join(__dirname, `src/data_${key}.json`), 'utf8'));
       performanceCache[key].data = dataToServe;
-      performanceCache[key].timestamp = Date.now() - (4 * 60 * 60 * 1000);
+      performanceCache[key].timestamp = 0;
       cacheSource = "local-disk";
     } catch (err) {
       console.error(`Error loading fallback for ${key}:`, err);

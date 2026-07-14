@@ -751,20 +751,26 @@ app.get('/api/performance', async (req, res) => {
   }
 
   // Stale-While-Revalidate (SWR) Check:
-  // If the cache is older than 4 hours, trigger background sync without blocking the user
+  // We sync in-request when stale to ensure Cloud Run allocates CPU to complete the BigQuery query and GCS write
   const age = Date.now() - performanceCache[key].timestamp;
   const fourHours = 4 * 60 * 60 * 1000;
   if (age > fourHours) {
-    console.log(`[SWR] Cache for ${key} is stale (age: ${(age / 1000 / 60).toFixed(1)} mins). Triggering background sync...`);
+    console.log(`[SWR] Cache for ${key} is stale (age: ${(age / 1000 / 60).toFixed(1)} mins). Triggering in-request sync...`);
     
-    // Prevent duplicate concurrent sync runs by resetting the timestamp immediately
+    // Prevent duplicate concurrent sync runs
     performanceCache[key].timestamp = Date.now();
     
-    syncCacheFromBigQuery(platform).catch(err => {
-      console.error(`[SWR] Background sync failed for ${key}:`, err);
+    try {
+      const freshData = await syncCacheFromBigQuery(platform);
+      if (freshData && freshData.length > 0) {
+        dataToServe = freshData;
+        cacheSource = "BigQuery-sync";
+      }
+    } catch (err) {
+      console.error(`[SWR] In-request sync failed for ${key}:`, err);
       // Reset timestamp to retry in 10 minutes on failure
       performanceCache[key].timestamp = Date.now() - (fourHours - 10 * 60 * 1000);
-    });
+    }
   }
 
   console.log(`Serving cached performance data for ${key} from ${cacheSource}`);

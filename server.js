@@ -255,6 +255,9 @@ app.post('/api/commentary', async (req, res) => {
         author,
         metrics_json: JSON.stringify(metrics),
         platform
+      },
+      types: {
+        chips: ['STRING']
       }
     };
 

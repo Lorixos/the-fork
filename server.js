@@ -84,6 +84,86 @@ function normalizeCampaign(campaign3) {
   return "Booking";
 }
 
+function cleanTikTokAdName(rawText) {
+  if (!rawText || typeof rawText !== "string") return "Untitled Ad";
+  const trimmed = rawText.trim();
+
+  // 1. Look for embedded taxonomy codes like IT0118_Video_... or _IT0118_Video_... or #surmacchio_IT0118_Video_...
+  const taxonomyMatch = trimmed.match(/(?:#|_)?([A-Za-z0-9]+_)?((?:IT|ES|FR|PT|UK|DE|CH|BE|NL|SE|AT)\d{3,4}_[A-Za-z0-9_]+)/i);
+  if (taxonomyMatch) {
+    let code = (taxonomyMatch[1] ? taxonomyMatch[1] : "") + taxonomyMatch[2];
+    return code.replace(/^_+|_+$/g, "");
+  }
+
+  // 2. Look for secondary taxonomy patterns (e.g. IT_Video_... or TTCXQ4_... or PT0007_...)
+  const altTaxonomyMatch = trimmed.match(/(?:#|_)?((?:IT|ES|FR|PT|UK|DE|CH|BE|NL|SE|AT)_Video_[A-Za-z0-9_]+|TTCXQ4_[A-Za-z0-9_]+)/i);
+  if (altTaxonomyMatch) {
+    return altTaxonomyMatch[1].replace(/^_+|_+$/g, "");
+  }
+
+  // 3. Look for video file names with extension or numbering (e.g. @denisecitti VIDEO 1.mp4_008 or VDEF_...)
+  const videoFileMatch = trimmed.match(/^(@?[A-Za-z0-9_.]+\s+VIDEO\s+\d+[^.\n]*|VDEF_[A-Za-z0-9_]+)/i);
+  if (videoFileMatch) {
+    return videoFileMatch[1].trim();
+  }
+
+  // 4. If it's already a standard, clean ad naming convention (single-line, reasonable length, not ad copy)
+  const isCaption = (
+    trimmed.includes("\n") ||
+    trimmed.length > 120 ||
+    /^(?:[#*]?adv\b|adv[:\-–—\s])/i.test(trimmed) ||
+    trimmed.includes("@TheFork") ||
+    trimmed.includes("TheFork è un") ||
+    trimmed.includes("Abbiamo scoperto") ||
+    trimmed.includes("Mangio in ristoranti") ||
+    trimmed.includes("Scarica l’app")
+  );
+
+  if (!isCaption) {
+    return trimmed;
+  }
+
+  // 5. Ad copy cleanup for Spark ads / influencer posts without taxonomy code:
+  const allHandles = (trimmed.match(/@([A-Za-z0-9_.]+)/g) || [])
+    .filter((h) => !h.toLowerCase().includes("thefork"));
+
+  const pinMatch = trimmed.match(/📍\s*([^\n\r,–—]+?)(?:\s*(?:,|–|—|\bin\b|\ba\b|Corso|Via|\n|\r|$))/iu);
+  let locationOrPlace = pinMatch ? pinMatch[1].trim().replace(/^[^\w@]+/u, "") : "";
+
+  let cleanText = trimmed
+    .replace(/^(?:[#*]?adv|adv[:\-–—]?|[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\s⬇️⚠️📍🍕✨🍣🍖🍝👇🏻])+/iu, "")
+    .trim();
+
+  const cityMatch = trimmed.match(/\b(a|in|di)\s+(Milano|Torino|Roma|Firenze|Napoli|Bologna|Palermo|Genova|Catania|Verona|Venezia|Madrid|Barcelona|Paris|Lisbon|Porto)\b/i);
+  const city = cityMatch ? cityMatch[2] : "";
+
+  let firstLine = cleanText.split(/[\n\r]+/)[0].trim();
+  const sentenceEnd = firstLine.search(/[.!?]/);
+  if (sentenceEnd > 20 && sentenceEnd < 70) {
+    firstLine = firstLine.slice(0, sentenceEnd).trim();
+  }
+  firstLine = firstLine.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "").trim();
+
+  let result = "";
+  if (allHandles.length > 0) {
+    const handle = allHandles[0];
+    if (locationOrPlace && !locationOrPlace.toLowerCase().includes(handle.replace("@", "").toLowerCase())) {
+      result = `${handle} (${locationOrPlace}${city && !locationOrPlace.includes(city) ? `, ${city}` : ""})`;
+    } else if (city) {
+      result = `${handle} (${city}) — ${firstLine.slice(0, 45)}`;
+    } else {
+      result = `${handle} — ${firstLine.slice(0, 50)}`;
+    }
+  } else if (locationOrPlace) {
+    result = `${locationOrPlace}${city && !locationOrPlace.includes(city) ? ` (${city})` : ""} — ${firstLine.slice(0, 45)}`;
+  } else {
+    result = city ? `[${city}] ${firstLine.slice(0, 55)}` : firstLine.slice(0, 60);
+  }
+
+  result = result.replace(/\s+/g, " ").replace(/[—–-]\s*$/, "").trim();
+  return result || trimmed.slice(0, 60);
+}
+
 function getWeekStart(dateStr) {
   const parts = dateStr.split('-');
   const y = parseInt(parts[0], 10);
@@ -519,9 +599,9 @@ async function syncCacheFromBigQuery(platform) {
     const m = normalizeMarket(row.Market);
     const obj = normalizeObjective(row.Campaign_3);
     const tgt = normalizeTarget(row.Campaign_1);
-    const cmp = normalizeCampaign(row.Campaign_3);
     const campaignName = row.campaign_name || "";
-    const adName = row.ad_name || "";
+    const rawAdName = row.ad_name || "";
+    const adName = isTiktok ? cleanTikTokAdName(rawAdName) : rawAdName;
     
     const groupKey = `${weekStartStr}|${m}|${obj}|${tgt}|${cmp}|${campaignName}|${adName}`;
     if (!groups[groupKey]) {

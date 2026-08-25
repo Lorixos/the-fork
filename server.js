@@ -857,8 +857,18 @@ app.get('/api/performance', async (req, res) => {
     }
   }
 
-  console.log(`Serving cached performance data for ${key} from ${cacheSource}`);
-  return res.status(200).json(dataToServe);
+  console.log(`Serving cached performance data for ${key} from ${cacheSource} (${dataToServe.length} rows)`);
+  
+  // Stream JSON row-by-row to avoid OOM from JSON.stringify on large datasets (Meta is 42MB+)
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200);
+  res.write('[');
+  for (let i = 0; i < dataToServe.length; i++) {
+    if (i > 0) res.write(',');
+    res.write(JSON.stringify(dataToServe[i]));
+  }
+  res.write(']');
+  res.end();
 });
 
 // 7. GET /api/cron-update-cache

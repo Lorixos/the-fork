@@ -599,6 +599,7 @@ async function syncCacheFromBigQuery(platform) {
     const m = normalizeMarket(row.Market);
     const obj = normalizeObjective(row.Campaign_3);
     const tgt = normalizeTarget(row.Campaign_1);
+    const cmp = normalizeCampaign(row.Campaign_3);
     const campaignName = row.campaign_name || "";
     const rawAdName = row.ad_name || "";
     const adName = isTiktok ? cleanTikTokAdName(rawAdName) : rawAdName;

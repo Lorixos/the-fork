@@ -6,6 +6,13 @@ const fs = require('fs');
 const { BigQuery } = require('@google-cloud/bigquery');
 const { Storage } = require('@google-cloud/storage');
 
+// Prevent container crashes from unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
 // Load local .env variables if file exists
 if (fs.existsSync(path.join(__dirname, '.env'))) {
   const envFile = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
@@ -799,6 +806,7 @@ async function initializeCache() {
 
 // 6. GET /api/performance
 app.get('/api/performance', async (req, res) => {
+  try {
   const { platform = 'meta' } = req.query;
   if (platform !== 'meta' && platform !== 'tiktok') {
     return res.status(400).json({ error: "Missing or invalid platform parameter. Use 'meta' or 'tiktok'." });
@@ -813,7 +821,7 @@ app.get('/api/performance', async (req, res) => {
     dataToServe = await readFromGCS(`data_${key}.json`);
     if (dataToServe) {
       performanceCache[key].data = dataToServe;
-      performanceCache[key].timestamp = 0;
+      performanceCache[key].timestamp = Date.now();
       cacheSource = "GCS";
     }
   }
@@ -869,6 +877,12 @@ app.get('/api/performance', async (req, res) => {
   }
   res.write(']');
   res.end();
+  } catch (err) {
+    console.error(`[FATAL] /api/performance crashed for ${req.query.platform}:`, err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: `Server error: ${err.message}` });
+    }
+  }
 });
 
 // 7. GET /api/cron-update-cache

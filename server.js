@@ -767,13 +767,13 @@ async function initializeCache() {
   const metaData = await readFromGCS('data_meta.json');
   if (metaData) {
     performanceCache.meta.data = metaData;
-    performanceCache.meta.timestamp = 0; // Mark as stale (age = Date.now()) to trigger revalidation on first hit
+    performanceCache.meta.timestamp = Date.now(); // Serve GCS data immediately; SWR refreshes after 4h
     console.log("Loaded Meta cache from GCS successfully.");
   } else {
     try {
       const localMeta = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_meta.json'), 'utf8'));
       performanceCache.meta.data = localMeta;
-      performanceCache.meta.timestamp = 0;
+      performanceCache.meta.timestamp = 0; // Local fallback is likely stale, trigger sync on first hit
       console.log("Fell back to local src/data_meta.json.");
     } catch (err) {
       console.error("Local Meta file not found:", err);
@@ -783,13 +783,13 @@ async function initializeCache() {
   const tiktokData = await readFromGCS('data_tiktok.json');
   if (tiktokData) {
     performanceCache.tiktok.data = tiktokData;
-    performanceCache.tiktok.timestamp = 0; // Mark as stale to trigger revalidation on first hit
+    performanceCache.tiktok.timestamp = Date.now(); // Serve GCS data immediately; SWR refreshes after 4h
     console.log("Loaded TikTok cache from GCS successfully.");
   } else {
     try {
       const localTiktok = JSON.parse(fs.readFileSync(path.join(__dirname, 'src/data_tiktok.json'), 'utf8'));
       performanceCache.tiktok.data = localTiktok;
-      performanceCache.tiktok.timestamp = 0;
+      performanceCache.tiktok.timestamp = 0; // Local fallback is likely stale, trigger sync on first hit
       console.log("Fell back to local src/data_tiktok.json.");
     } catch (err) {
       console.error("Local TikTok file not found:", err);

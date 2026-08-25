@@ -536,7 +536,6 @@ function optionsForFilter(filterId) {
 function dateBoundsForMarket() {
   const rows = state.data.rows || [];
   const starts = rows.map((row) => row.dateStart).filter(Boolean).sort();
-  const ends = rows.map((row) => row.dateEnd).filter(Boolean).sort();
   
   const absoluteMin = "2025-01-01";
   let minVal = starts[0] || state.dateStart || absoluteMin;
@@ -544,8 +543,11 @@ function dateBoundsForMarket() {
     minVal = absoluteMin;
   }
   
-  const absoluteMax = new Date().toISOString().split('T')[0];
-  const maxVal = ends[ends.length - 1] || state.dateEnd || absoluteMax;
+  // Always use today as the upper bound — ad platforms have 1-2 day reporting
+  // latency, so the latest data row is always behind today. Capping the
+  // calendar to the data edge caused the date filter to miss the most recent
+  // week every single time the cache was even slightly stale.
+  const maxVal = new Date().toISOString().split('T')[0];
   
   return {
     min: minVal,
@@ -1252,9 +1254,11 @@ function applyPresetImmediately(start, end) {
 }
 
 function getCalendarPresets(bounds) {
-  const maxDateStr = (bounds && bounds.max) ? bounds.max : new Date().toISOString().split('T')[0];
-  const refDate = new Date(maxDateStr + "T00:00:00");
-  
+  // Always use today as the reference date for presets. The old code used
+  // bounds.max (the latest data row), which lagged behind by days whenever
+  // the cache was stale — causing "Last Week" to point to 2 weeks ago.
+  const refDate = new Date();
+  refDate.setHours(0, 0, 0, 0);
   const dayOfWeek = refDate.getDay(); // 0 is Sunday, 1 is Monday, ...
   let lastWeekEnd, lastWeekStart;
   

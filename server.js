@@ -906,7 +906,29 @@ app.get('/api/cron-update-cache', async (req, res) => {
   }
 });
 
+// 8. GET /api/health - debug endpoint
+app.get('/api/health', (req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    version: 'c415035-debug',
+    uptime: process.uptime(),
+    heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
+    heap_total_mb: Math.round(mem.heapTotal / 1024 / 1024),
+    rss_mb: Math.round(mem.rss / 1024 / 1024),
+    meta_cached: !!performanceCache.meta.data,
+    meta_rows: performanceCache.meta.data ? performanceCache.meta.data.length : 0,
+    meta_timestamp: performanceCache.meta.timestamp,
+    tiktok_cached: !!performanceCache.tiktok.data,
+    tiktok_rows: performanceCache.tiktok.data ? performanceCache.tiktok.data.length : 0,
+    tiktok_timestamp: performanceCache.tiktok.timestamp,
+  });
+});
+
 app.listen(PORT, async () => {
   console.log(`Node Server running on port ${PORT}...`);
-  await initializeCache();
+  try {
+    await initializeCache();
+  } catch (err) {
+    console.error('[STARTUP] initializeCache crashed:', err);
+  }
 });

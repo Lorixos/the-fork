@@ -51,14 +51,34 @@ const storage = new Storage({ projectId: PROJECT_ID });
 const BUCKET_NAME = "thefork-dashboard-cache";
 
 // Normalization Helpers
-function normalizeMarket(m) {
-  if (!m) return "ES";
-  const mUpper = m.toUpperCase();
+function normalizeMarket(m, campaignName) {
+  if (!m && !campaignName) return "ES";
+  const mUpper = (m || "").toUpperCase();
+  const cUpper = (campaignName || "").toUpperCase();
+
+  // 1. Direct 2-letter market code match
+  if (mUpper === 'FR' || mUpper === 'ES' || mUpper === 'IT' || mUpper === 'PT' || mUpper === 'UK' || mUpper === 'GB' || mUpper === 'BE' || mUpper === 'AU' || mUpper === 'DE' || mUpper === 'AT' || mUpper === 'SE' || mUpper === 'NL' || mUpper === 'CH') {
+    return mUpper === 'GB' ? 'UK' : mUpper;
+  }
+
+  // 2. Known Account IDs
   if (mUpper.includes('6982545611807555586') || mUpper.includes('FR') || mUpper.includes('LAFOURCHETTE')) return 'FR';
   if (mUpper.includes('6982545462632906753') || mUpper.includes('ES')) return 'ES';
   if (mUpper.includes('7015602279810138113') || mUpper.includes('GB') || mUpper.includes('UNITED KINGDOM') || mUpper.includes('CO.UK')) return 'UK';
   if (mUpper.includes('7190030035821166594') || mUpper.includes('BE')) return 'BE';
   if (mUpper.includes('7071236272924262402') || mUpper.includes('AU')) return 'AU';
+  if (mUpper.includes('6886783684171530241') || mUpper.includes('IT')) return 'IT';
+  if (mUpper.includes('7068331270811533314') || mUpper.includes('PT')) return 'PT';
+
+  // 3. Fallback to Campaign Name Taxonomy extraction (e.g. NC_ACQ_Install_FR_... -> FR)
+  if (cUpper) {
+    const taxMatch = cUpper.match(/(?:^|_)(FR|ES|IT|PT|UK|GB|BE|AU|DE|AT|SE|NL|CH)(?:_|$)/);
+    if (taxMatch) {
+      const code = taxMatch[1];
+      return code === 'GB' ? 'UK' : code;
+    }
+  }
+
   if (mUpper.includes('AT')) return 'AT';
   if (mUpper.includes('DE')) return 'DE';
   if (mUpper.includes('SE')) return 'SE';
@@ -66,7 +86,8 @@ function normalizeMarket(m) {
   if (mUpper.includes('IT')) return 'IT';
   if (mUpper.includes('PT')) return 'PT';
   if (mUpper.includes('CH')) return 'CH';
-  return mUpper.substring(0, 2);
+
+  return mUpper.length >= 2 ? mUpper.substring(0, 2) : "ES";
 }
 
 function normalizeObjective(campaign3) {
@@ -546,9 +567,12 @@ async function syncCacheFromBigQuery(platform) {
       WHEN Market = '7068331270811533314' OR Market = 'PT' THEN 'PT'
       WHEN Market = '6982545462632906753' OR Market = 'ES' THEN 'ES'
       WHEN Market = '6982545611807555586' OR Market = 'FR' THEN 'FR'
-      WHEN Market = '7015602279810138113' OR Market = 'UK' THEN 'UK'
+      WHEN Market = '7015602279810138113' OR Market = 'UK' OR Market = 'GB' THEN 'UK'
       WHEN Market = '7190030035821166594' OR Market = 'BE' THEN 'BE'
       WHEN Market = '7071236272924262402' OR Market = 'AU' THEN 'AU'
+      WHEN REGEXP_CONTAINS(campaign_name, r'(?:^|_)(FR|ES|IT|PT|UK|GB|BE|AU|DE|AT|SE|NL|CH)(?:_|$)') 
+        THEN CASE WHEN REGEXP_EXTRACT(campaign_name, r'(?:^|_)(FR|ES|IT|PT|UK|GB|BE|AU|DE|AT|SE|NL|CH)(?:_|$)') = 'GB' THEN 'UK' 
+                  ELSE REGEXP_EXTRACT(campaign_name, r'(?:^|_)(FR|ES|IT|PT|UK|GB|BE|AU|DE|AT|SE|NL|CH)(?:_|$)') END
       ELSE Market
     END AS Market` : "Market";
 
@@ -603,7 +627,7 @@ async function syncCacheFromBigQuery(platform) {
     const dStr = row.day.value || row.day;
     const weekStartStr = getWeekStart(dStr);
     
-    const m = normalizeMarket(row.Market);
+    const m = normalizeMarket(row.Market, row.campaign_name);
     const obj = normalizeObjective(row.Campaign_3);
     const tgt = normalizeTarget(row.Campaign_1);
     const cmp = normalizeCampaign(row.Campaign_3);

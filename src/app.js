@@ -407,8 +407,23 @@ function normalizeRow(row) {
     dateStart: firstValue(row, ["date_start", "date", "week_start", "start_date"]),
     dateEnd: firstValue(row, ["date_end", "week_end", "end_date"]),
     market: (() => {
-      const m = String(firstValue(row, ["market", "country_code", "country", "market_code"]) || "").toUpperCase();
-      return m === "GB" ? "UK" : m;
+      let m = String(firstValue(row, ["market", "country_code", "country", "market_code"]) || "").toUpperCase();
+      if (m === "GB") return "UK";
+      if (m.includes('6982545611807555586') || m.includes('FR') || m.includes('LAFOURCHETTE')) return 'FR';
+      if (m.includes('6982545462632906753') || m.includes('ES')) return 'ES';
+      if (m.includes('7015602279810138113') || m.includes('GB') || m.includes('UNITED KINGDOM') || m.includes('CO.UK')) return 'UK';
+      if (m.includes('7190030035821166594') || m.includes('BE')) return 'BE';
+      if (m.includes('7071236272924262402') || m.includes('AU')) return 'AU';
+      if (m.includes('6886783684171530241') || m.includes('IT')) return 'IT';
+      if (m.includes('7068331270811533314') || m.includes('PT')) return 'PT';
+      if (m.length > 2 || !m) {
+        const cmp = String(firstValue(row, ["campaign_name", "campaign"]) || "").toUpperCase();
+        const taxMatch = cmp.match(/(?:^|_)(FR|ES|IT|PT|UK|GB|BE|AU|DE|AT|SE|NL|CH)(?:_|$)/);
+        if (taxMatch) {
+          return taxMatch[1] === "GB" ? "UK" : taxMatch[1];
+        }
+      }
+      return m.length >= 2 ? m.substring(0, 2) : "ES";
     })(),
     objective: firstValue(row, ["objective", "campaign_objective"]) || "ACQ",
     target: firstValue(row, ["target", "audience", "targeting"]) || "Broad",
